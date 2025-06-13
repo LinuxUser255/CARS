@@ -1,30 +1,34 @@
-# Chris's Auto Rice Script
+# Chris' Auto Rice Script
 
-## A shell script to automate the customization of my Debian Linux enviroment
+### A shell script to automate the customization of my Debian Linux enviroment
 
 
-### What's included
+**Currntly in development**
 
-<br>
+### What all is to be included:
 
-- zsh shell
+- zsh shell - Built from source
 - oh-my-zsh
 https://ohmyz.sh/
 
 - zsh syntax color
 https://github.com/zsh-users/zsh-syntax-highlighting
 
-- my dot files: .zsh
-- Alacritty Terminal
 - Neovim -- build from source
+
+- Alacritty Terminal -- Built from source
+
+- my dot files: .zsh
 - My Neovim config
 - Brave browser
 - yt-dlp: curl the scipt from github
 
 
+**and more...**
+
 <br>
 
-- packages (essential)
+- Initial packages to be installed:
     - vim
     - ripgrep
     - fastfetch - build from souce
@@ -62,9 +66,10 @@ https://github.com/zsh-users/zsh-syntax-highlighting
     - go
     - node
     - php
-    - and others too, just haven't thought of
+    - and more
 
-#### And more
+   (Python comes pre-installed on Linux)
+
 
 
 <br>
