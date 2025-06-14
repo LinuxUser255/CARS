@@ -153,7 +153,6 @@ check_shell () {
     fi
 }
 
-# Refactor to give the code block inside the function eight spaces from the left margin
 # Build and install Zsh from source with error handling
 build_zsh_from_source() {
         # zsh_version=5.9
@@ -162,11 +161,12 @@ build_zsh_from_source() {
                 error "Failed to install required dependencies for building Zsh."
 
         # Create a temporary directory for building Zsh
-        local build_dir=$(mktemp -d) ||
+        local build_dir
+        build_dir=$(mktemp -d) ||
                 error "Failed to create temporary directory for building Zsh."
 
         # Ensure clean up after build
-        trap "rm -rf $build_dir" EXIT
+        trap 'rm -rf "$build_dir"' EXIT
 
         # Download and extract Zsh source code
         cd "$build_dir" ||
@@ -219,8 +219,11 @@ build_zsh_from_source() {
 
 # Function to install oh-my-zsh and plugins
 install_zsh_extras() {
-        local user="${SUDO_USER:-$USER}"
-        local user_home=$(getent passwd "$user" | cut -d: -f6)
+        local user
+        user="${SUDO_USER:-$USER}"
+
+        local user_home
+        user_home=$(getent passwd "$user" | cut -d: -f6)
 
         info "Installing oh-my-zsh for $user..."
 
@@ -254,7 +257,7 @@ install_zsh_extras() {
 
         # Update the .zshrc to use plugins
         local zshrc="$user_home/.zshrc"
-        backup_zshrc="${zshrc}.backup"
+       # backup_zshrc="${zshrc}.backup"
 
         # use sed to update plugins line
         if [[ -f "$zshrc" ]]; then
@@ -265,8 +268,7 @@ install_zsh_extras() {
 }
 
 
-# Install Rust and build Alacritty
-# Build Alacritty from source
+# Install Rust and build Alacritty from source
 build_alacritty() {
         info "Building Alacritty from source..."
 
@@ -280,11 +282,13 @@ build_alacritty() {
         install_rustup_and_compiler
 
         # Create a temporary directory for building Alacritty
-        local build_dir=$(mktemp -d) ||
+        local build_dir
+
+        build_dir=$(mktemp -d) ||
                 error "Failed to create temporary directory for building Alacritty."
 
         # Ensure clean up after build
-        trap "rm -rf $build_dir" EXIT
+        trap 'rm -rf $build_dir' EXIT
 
         # Clone and build Alacritty
         cd "$build_dir" ||
@@ -371,7 +375,6 @@ install_desktop_files() {
                 warning "Failed to install Zsh completion."
 }
 
-
 # Build Neovim from source
 build_neovim() {
         info "Building Neovim from source..."
@@ -382,13 +385,25 @@ build_neovim() {
             return
         fi
 
-        # 1.Install build pre-requisites
-        apt install -y ninja-build gettext cmake curl build-essential
-        # 2. Then git clone the Neovim repository
-        git clone https://github.com/neovim/neovim
-        # 3. cd into neovim and run git checkout stable
-        # 4. then make CMAKE_BUILD_TYPE=RelWithDebInfo
-        # 5. Then sudo make install
+        # Install build prerequisites
+        info "Installing Neovim build dependencies..."
+        apt install -y ninja-build gettext cmake curl build-essential ||
+                error "Failed to install Neovim build dependencies."
+
+        # Create a temporary directory for building Neovim
+        local build_dir
+        build_dir=$(mktemp -d) ||
+                error "Failed to create temporary directory for building Neovim."
+
+        # Ensure clean up after build
+        trap 'rm -rf "$build_dir"' EXIT
+
+        # Clone Neovim repository
+        cd "$build_dir" ||
+                error "Failed to change directory to $build_dir."
+
+        git clone https://github.com/neovim/neovim.git ||
+                error "Failed to clone Neovim repository."
 
         # Navigate to the cloned Neovim repository
         cd neovim ||
@@ -397,13 +412,16 @@ build_neovim() {
         # Checkout the stable branch
         git checkout stable ||
                 error "Failed to checkout stable branch."
-        cd neovim ||
 
-        # Build Neovim using sudo make install
-        sudo make install ||
+        # Build Neovim
+        make CMAKE_BUILD_TYPE=RelWithDebInfo ||
                 error "Failed to build Neovim."
 
-        success "Neovim built successfully."
+        # Install Neovim
+        sudo make install ||
+                error "Failed to install Neovim."
+
+        info "Neovim built and installed successfully."
 }
 
 
@@ -450,6 +468,10 @@ fastfetch_build(){
 # My lazy scripts
 lazy_scripts(){
     # place all the downloaded scripts in /usr/local/bin
+        # print message in bold blue that says "Curling lasy scripts..."
+        printf "\e[1m\e[34mCurling lazy scripts...\e[0m\n"
+
+
         curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fff -o /usr/local/bin/fff
         curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fast_grep.sh -o /usr/local/bin/fast_grep.sh
         curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/pwsearch.sh -o /usr/local/bin/pwsearch.sh
@@ -458,7 +480,9 @@ lazy_scripts(){
 
         # Make all scripts executable
         chmod +x /usr/local/bin/fff /usr/local/bin/fast_grep.sh /usr/local/bin/pwsearch.sh /usr/local/bin/faster.sh /usr/local/bin/gclone.sh
-        success "All lazy scripts installed successfully."
+
+        # chown current user ownership of the scripts
+        sudo chown -R $USER:$USER /usr/local/bin/fff /usr/local/bin/fast_grep.sh /usr/local/bin/pwsearch.sh /usr/local/bin/faster.sh /usr/local/bin/gclone.sh
 }
 
 
