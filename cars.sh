@@ -24,31 +24,31 @@ readonly BLUE="\e[34m"
 
 # Function to print colored output
 print_msg() {
-    local color="$1"
-    local msg="$2"
-    printf "${color}${BOLD}%s${RESET}\n" "$msg"
+        local color="$1"
+        local msg="$2"
+        printf "${color}${BOLD}%s${RESET}\n" "$msg"
 }
 
 # Function to print error messages
 error(){
-    print_msg "$RED" "Error: $1" >&2
-    exit 1
+        print_msg "$RED" "Error: $1" >&2
+        exit 1
 }
 
 # Function to print Success messages
 success(){
-    print_msg "$GREEN" "Success: $1" >&2
+        print_msg "$GREEN" "Success: $1" >&2
 }
 
 # Function to print informational messages
 info(){
-    print_msg "$BLUE" "Info: $1"
+        print_msg "$BLUE" "Info: $1"
 }
 
 
 # Function to print warning messages
 warning(){
-    print_msg "$YELLOW" "Warning: $1"
+       print_msg "$YELLOW" "Warning: $1"
 }
 
 
@@ -58,17 +58,17 @@ check_root () {
 
 
 update_system() {
-    printf "\033[1;31m[+] Updating system...\033[0m\n"
-    apt update && apt upgrade -y
+        printf "\033[1;31m[+] Updating system...\033[0m\n"
+        apt update && apt upgrade -y
 }
 
 # Function to check if a package is installed
 is_installed() {
-    dpkg-query -W "$1" >/dev/null 2>&1 | grep -q "installed"
+        dpkg-query -W "$1" >/dev/null 2>&1 | grep -q "installed"
 }
 
 cmd_exists() {
-    command -v "$1" >/dev/null 2>&1
+        command -v "$1" >/dev/null 2>&1
 }
 
 
@@ -616,3 +616,6 @@ main() {
         install_nodejs
         my_dot_files
 }
+
+main
+
