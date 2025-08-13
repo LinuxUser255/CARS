@@ -2,7 +2,9 @@
 
 # Chris's Auto Rice Script
 #------------------------------
-# About this install: The unconventional features, and unique sytle.
+# This rice script is for Debian - based distros.
+# About this install:
+# The unconventional features, and unique sytle.
 # It is inspired by Dylan Araps Pure Bash Bible & his Neofectch shell script.
 # https://github.com/LinuxUser255/pure-bash-bible
 # https://github.com/dylanaraps/neofetch
@@ -33,10 +35,9 @@ error(){
     exit 1
 }
 
-# Function to print error messages
+# Function to print Success messages
 success(){
     print_msg "$GREEN" "Success: $1" >&2
-    exit 1
 }
 
 # Function to print informational messages
@@ -56,6 +57,11 @@ check_root () {
 }
 
 
+update_system() {
+    printf "\033[1;31m[+] Updating system...\033[0m\n"
+    apt update && apt upgrade -y
+}
+
 # Function to check if a package is installed
 is_installed() {
     dpkg-query -W "$1" >/dev/null 2>&1 | grep -q "installed"
@@ -66,17 +72,13 @@ cmd_exists() {
 }
 
 
-update_system() {
-    printf "\033[1;31m[+] Updating system...\033[0m\n"
-    apt update && apt upgrade -y
-}
-
 pkgs=(
      vim
      git
      curl
      gcc
      make
+     cmake
      ripgrep
      python3-pip
      exuberant-ctags
@@ -88,6 +90,7 @@ pkgs=(
      gettext
      unzip
      x11-server-utils
+     i3
      setxkbmap
      xdtools
      ffmpeg
@@ -95,9 +98,9 @@ pkgs=(
      gpg
      xclip
      xsel
-     texlive-full
+     # install LaTeX later
+     #texlive-full
  )
-
 
 # Function to install packages
 install_packages() {
@@ -114,7 +117,7 @@ install_packages() {
                 if apt install -y "$pkg" &>/dev/null; then
                     success "Installed $pkg"
                 else
-                    waring "Failed to install $pkg"
+                    warning "Failed to install $pkg"
                     failed+=("$pkg")
                 fi
             else
@@ -130,6 +133,38 @@ install_packages() {
 
 }
 
+# Install Brave browser
+install_brave() {
+        info "Installing Brave browser..."
+
+        # Check if Brave is already installed
+        if cmd_exists brave-browser; then
+            info "Brave is already installed."
+            return
+        fi
+
+        # Install Brave dependencies
+        apt install -y apt-transport-https curl gnupg gnupg2 ||
+            error "Failed to install Brave dependencies."
+
+        # Import Brave's GPG key
+        curl -fsSL https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg | gpg --dearmor |
+            tee /usr/share/keyrings/brave-browser-archive-keyring.gpg >/dev/null ||
+            error "Failed to import Brave's GPG key."
+
+        # Add Brave repository to APT sources
+        echo "deb [signed-by=/usr/share/keyrings/brave-browser-archive-keyring.gpg] https://brave-browser-apt-release.s3.brave.com/ stable main" |
+            tee /etc/apt/sources.list.d/brave-browser-release.list ||
+            error "Failed to add Brave repository to APT sources."
+
+        # Update APT sources and install Brave
+        { apt update && apt install -y brave-browser; } ||
+            error "Failed to update APT sources or install Brave browser."
+
+        success "Brave browser installed successfully."
+}
+
+
 # Check for zsh and if not, ask user if they want to build and install it
 check_shell () {
         if ! [ "$(command -v zsh)" ] || [ "$(ps -p $$ -o comm=)" != "zsh" ]; then
@@ -141,8 +176,6 @@ check_shell () {
             case "${choice,,}" in # convert to lowercase
                 y|yes)
                     build_zsh_from_source
-                    info "After building Zsh is complete, logout & login to apply the changes.\nThen continue with the script.\n"
-                    exit 0
                     ;;
                 *)
                     error "This script requires zsh as the current shell. Exiting."
@@ -213,9 +246,12 @@ build_zsh_from_source() {
         fi
 
         success "Zsh built and installed successfully."
-        info "Please log out and log back in for the shell change to take effect, and continue running the script."
-}
+        info "IMPORTANT: You must log out and log back in for the shell change to take effect."
+        info "After logging back in with Zsh, run this script again to continue the installation."
 
+        # Exit the script to force user logout/login
+        exit 0
+}
 
 # Function to install oh-my-zsh and plugins
 install_zsh_extras() {
@@ -313,7 +349,8 @@ build_alacritty() {
 
         # Create config directory for the user
         local user="${SUDO_USER:-$USER}"
-        local user_home=$(getent passwd "$user" | cut -d: -f6)
+        local user_home
+        user_home=$(getent passwd "$user" | cut -d: -f6)
         local config_dir="$user_home/.config/alacritty"
 
         # Create config directory if it doesn't exist
@@ -333,7 +370,7 @@ build_alacritty() {
 
 # Install desktop files and terminfo for Alacritty
 install_desktop_files() {
-        # Install terminfo
+        # Install terminfo files for Alacritty
         if ! infocmp alacritty &>/dev/null; then
             cd "$build_dir/alacritty" || return
 
@@ -362,7 +399,8 @@ install_desktop_files() {
 
         # Install shell completions for the user
         local user="${SUDO_USER:-$USER}"
-        local user_home=$(getent passwd "$user" | cut -d: -f6)
+        local user_home
+        user_home=$(getent passwd "$user" | cut -d: -f6)
 
         # Bash
         mkdir -p /usr/share/bash-completion/completions
@@ -424,56 +462,21 @@ build_neovim() {
         info "Neovim built and installed successfully."
 }
 
-
-# Install Brave browser
-install_brave() {
-        info "Installing Brave browser..."
-
-        # Check if Brave is already installed
-        if cmd_exists brave-browser; then
-            info "Brave is already installed."
-            return
-        fi
-
-        # Install Brave dependencies
-        apt install -y apt-transport-https curl gnupg gnupg2 ||
-            error "Failed to install Brave dependencies."
-
-        # Import Brave's GPG key
-        curl -fsSL https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg | gpg --dearmor |
-            tee /usr/share/keyrings/brave-browser-archive-keyring.gpg >/dev/null ||
-            error "Failed to import Brave's GPG key."
-
-        # Add Brave repository to APT sources
-        echo "deb [signed-by=/usr/share/keyrings/brave-browser-archive-keyring.gpg] https://brave-browser-apt-release.s3.brave.com/ stable main" |
-            tee /etc/apt/sources.list.d/brave-browser-release.list ||
-            error "Failed to add Brave repository to APT sources."
-
-        # Update APT sources and install Brave
-        apt update && apt install -y brave-browser ||
-            error "Failed to install Brave browser."
-
-        success "Brave browser installed successfully."
-}
-
-#FASTFETCH - build from souce
-fastfetch_build(){
-    git clone https://github.com/fastfetch-cli/fastfetch.git
-    cd build
-    cmake ..
-    cmak --build . --target fastfetch
+# My Neovim configuration
+install_neovim_config() {
+    curl -LO https://raw.githubusercontent.com/LinuxUser255/nvim/refs/heads/main/install.sh && chmod +x install.sh && ./install.sh
 
 }
+
 
 # My lazy scripts
 lazy_scripts(){
-    # place all the downloaded scripts in /usr/local/bin
+        # place all the downloaded scripts in /usr/local/bin
         # print message in bold blue that says "Curling lasy scripts..."
         printf "\e[1m\e[34mCurling lazy scripts...\e[0m\n"
 
-
-        curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fff -o /usr/local/bin/fff
-        curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fast_grep.sh -o /usr/local/bin/fast_grep.sh
+        curl -L https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fff -o /usr/local/bin/fff
+        curl -L https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fast_grep.sh -o /usr/local/bin/fast_grep.sh
         curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/pwsearch.sh -o /usr/local/bin/pwsearch.sh
         curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/faster.sh -o /usr/local/bin/faster.sh
         curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/gclone.sh -o /usr/local/bin/gclone.sh
@@ -482,34 +485,134 @@ lazy_scripts(){
         chmod +x /usr/local/bin/fff /usr/local/bin/fast_grep.sh /usr/local/bin/pwsearch.sh /usr/local/bin/faster.sh /usr/local/bin/gclone.sh
 
         # chown current user ownership of the scripts
-        sudo chown -R $USER:$USER /usr/local/bin/fff /usr/local/bin/fast_grep.sh /usr/local/bin/pwsearch.sh /usr/local/bin/faster.sh /usr/local/bin/gclone.sh
+        sudo chown -R "$USER":"$USER" /usr/local/bin/fff /usr/local/bin/fast_grep.sh /usr/local/bin/pwsearch.sh /usr/local/bin/faster.sh /usr/local/bin/gclone.sh
 }
 
+# install Golang
+install_golang() {
+        info "Installing Golang..."
 
+        # Check if Go is already installed
+        if cmd_exists go; then
+            info "Go is already installed."
+            return
+        fi
 
+        # Download and install Go
+        curl -fsSL https://golang.org/dl/go1.18.linux-amd64.tar.gz \
+             | tar -C /usr/local -xzf - ||
+                error "Failed to download and install Go."
 
-# my_dot_files()I{
-#
-#}
+        success "Go installed successfully."
+        info "To use Go, add the following line to your ~/.bashrc or ~/.zshrc:"
+        info "export PATH=$PATH:/usr/local/go/bin"
+}
 
+install_nodejs() {
+        local user="${SUDO_USER:-$USER}"
+        local user_home
+        user_home=$(getent passwd "$user" | cut -d: -f6)
+
+        info "Installing Node.js via NVM for $user..."
+
+        # Check if Node.js is already installed
+        if cmd_exists node; then
+            info "Node.js is already installed."
+            return
+        fi
+
+        # Check if NVM is already installed
+        if [[ -f "$user_home/.nvm/nvm.sh" ]]; then
+            info "NVM is already installed."
+        else
+            info "Installing NVM..."
+            # Download and install nvm as the user
+            su - "$user" -c 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash' ||
+                error "Failed to install NVM"
+            success "NVM installed successfully"
+        fi
+
+        # Install Node.js as the user
+        info "Installing Node.js version 22..."
+        su - "$user" -c 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"; nvm install 22 && nvm use 22 && nvm alias default 22' ||
+            error "Failed to install Node.js"
+
+        # Verify installation
+        info "Verifying Node.js installation..."
+        su - "$user" -c 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"; echo "Node.js version: $(node -v)"; echo "NPM version: $(npm -v)"; echo "Current NVM version: $(nvm current)"' ||
+            warning "Failed to verify Node.js installation"
+
+        success "Node.js installed successfully for $user"
+}
+
+my_dot_files(){
+        # i3 window manager config file
+        local user="${SUDO_USER:-$USER}"
+        local user_home
+        user_home=$(getent passwd "$user" | cut -d: -f6)
+
+        info "Setting up dotfiles for $user..."
+
+        # Create i3 config directory
+        mkdir -p "$user_home/.config/i3" ||
+            error "Failed to create i3 config directory"
+
+        # Download i3 config file
+        curl -fsSL "https://raw.githubusercontent.com/LinuxUser255/ShellScripting/refs/heads/main/ConfigFiles/config" \
+             -o "$user_home/.config/i3/config" ||
+            error "Failed to download i3 config file"
+
+        # Set proper ownership
+        chown -R "$user:$(id -gn "$user")" "$user_home/.config/i3" ||
+            warning "Failed to set ownership for i3 config"
+
+        success "i3 config installed successfully"
+
+        # Download .zshrc file to user's home directory
+        curl -fsSL "https://raw.githubusercontent.com/LinuxUser255/ShellScripting/refs/heads/main/dotfiles/.zshrc" \
+             -o "$user_home/.zshrc" ||
+            error "Failed to download .zshrc file"
+
+        # Set proper ownership for .zshrc
+        chown "$user:$(id -gn "$user")" "$user_home/.zshrc" ||
+            warning "Failed to set ownership for .zshrc"
+
+        success ".zshrc installed successfully"
+}
 
 
 main() {
 
-    check_root
-    install_packages
-    update_system
-    check_shell
-    build_zsh_from_source
-    install_zsh_extras
-    build_neovim
-    build_alacritty    # Added this line to call the function
-    install_brave
-    fastfetch_build
-    # lazy_scripts  # Added this line to call the function
-    # zsh_customize
+        check_root
+        update_system
+        install_packages
+        install_brave
+        check_shell
+
+        # Only call build_zsh_from_source if zsh is not installed
+        # The function exits the script, so we need to handle this differently
+        if ! cmd_exists zsh; then
+            build_zsh_from_source
+            # This will exit the script, so code below won't run
+        fi
+
+        # Only proceed if zsh is available
+        if cmd_exists zsh; then
+            install_zsh_extras
+        fi
+
+        build_neovim
+        install_neovim_config
+
+        # Only call build_alacritty if install_rustup_and_compiler function exists
+        if declare -f install_rustup_and_compiler >/dev/null; then
+            build_alacritty
+        else
+            warning "Skipping Alacritty build - install_rustup_and_compiler function not found"
+        fi
+
+        lazy_scripts
+        install_golang
+        install_nodejs
+        my_dot_files
 }
-
-main
-
-
