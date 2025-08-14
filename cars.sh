@@ -79,6 +79,7 @@ pkgs=(
      gcc
      make
      cmake
+     mulvad
      ripgrep
      python3-pip
      exuberant-ctags
@@ -105,7 +106,6 @@ pkgs=(
 # Function to install packages
 install_packages() {
         info "Installing packages..."
-
         local total=${#pkgs[@]}
         local count=0
         local failed=0
@@ -137,7 +137,6 @@ install_packages() {
 install_brave() {
         info "Installing Brave browser..."
 
-        # Check if Brave is already installed
         if cmd_exists brave-browser; then
             info "Brave is already installed."
             return
@@ -164,9 +163,9 @@ install_brave() {
         success "Brave browser installed successfully."
 }
 
-
 # Check for zsh and if not, ask user if they want to build and install it
 check_shell () {
+        # Either zsh is not installed or not the current shell is not zsh
         if ! [ "$(command -v zsh)" ] || [ "$(ps -p $$ -o comm=)" != "zsh" ]; then
             warning "ZSH is either not installed or not the current shell."
 
