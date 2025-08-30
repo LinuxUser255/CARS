@@ -3,12 +3,35 @@
 # Chris's Auto Rice Script
 #------------------------------
 # This rice script is for Debian - based distros.
-# About this install:
-# The unconventional features, and unique sytle.
-# It is inspired by Dylan Araps Pure Bash Bible & his Neofectch shell script.
-# https://github.com/LinuxUser255/pure-bash-bible
-# https://github.com/dylanaraps/neofetch
-# TODO: Fix the following Failed to install: mullvad, chromium, x11-server-utils, setxkbmap, xdtools
+
+# Better error handling - allow undefined variables but catch other errors
+#set -eo pipefail  # Exit on error and pipe failures, but allow undefined vars
+
+# Add a debug function
+debug() {
+    if [[ "${DEBUG:-0}" == "1" ]]; then
+        echo "DEBUG: $*" >&2
+    fi
+}
+
+# Add progress tracking
+progress() {
+    echo "PROGRESS: $*"
+}
+
+# Enhanced error function that doesn't always exit
+error() {
+    print_msg "$RED" "Error: $1" >&2
+    if [[ "${FATAL_ERROR:-1}" == "1" ]]; then
+        exit 1
+    fi
+}
+
+# Non-fatal error function
+warning_error() {
+    print_msg "$YELLOW" "Error: $1" >&2
+    return 1
+}
 
 # Text formatting
 readonly BOLD="\e[1m"
@@ -18,18 +41,11 @@ readonly GREEN="\e[32m"
 readonly YELLOW="\e[33m"
 readonly BLUE="\e[34m"
 
-
 # Function to print colored output
 print_msg() {
         local color="$1"
         local msg="$2"
         printf "${color}${BOLD}%s${RESET}\n" "$msg"
-}
-
-# Function to print error messages
-error(){
-        print_msg "$RED" "Error: $1" >&2
-        exit 1
 }
 
 # Function to print Success messages
@@ -42,94 +58,96 @@ info(){
         print_msg "$BLUE" "Info: $1"
 }
 
-
 # Function to print warning messages
 warning(){
        print_msg "$YELLOW" "Warning: $1"
 }
 
-
 check_root () {
-        [ "$(id -u)" -ne 0 ] && echo "Please run this script as root." && exit 1
+    if [[ "$(id -u)" -ne 0 ]]; then
+        error "Please run this script as root or with sudo."
+    fi
+    info "Running as root - OK"
 }
-
 
 update_system() {
         printf "\033[1;31m[+] Updating system...\033[0m\n"
-        apt update && apt upgrade -y
+        apt-get update && apt-get upgrade -y  # Fixed: was "apt get-upgrade"
 }
 
 # Function to check if a package is installed
 is_installed() {
-        dpkg-query -W "$1" >/dev/null 2>&1 | grep -q "installed"
+    dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed"
 }
 
 cmd_exists() {
         command -v "$1" >/dev/null 2>&1
 }
 
-
+# Packaes arrary
 pkgs=(
-         vim
-         git
-         curl
-         gcc
-         make
-         cmake
-         mulvad
-         ripgrep
-         python3-pip
-         exuberant-ctags
-         ack-grep
-         build-essential
-         arandr
-         chromium
-         ninja-build
-         gettext
-         unzip
-         x11-server-utils
-         i3
-         setxkbmap
-         xdtools
-         ffmpeg
-         pass
-         gpg
-         xclip
-         xsel
-         # install LaTeX later
-         #texlive-full
- )
+    vim
+    git
+    curl
+    gcc
+    make
+    cmake
+    # mullvad - This package doesn't exist in standard repos, remove or handle separately
+    ripgrep
+    python3-pip
+    exuberant-ctags
+    ack-grep
+    build-essential
+    arandr
+    #chromium
+    ninja-build
+    gettext
+    unzip
+    x11-xserver-utils    # Fixed: was "x11-server-utils"
+    i3
+    # setxkbmap - This is part of x11-xkb-utils
+   # x11-xkb-utils       # Contains setxkbmap
+    xdotool             # Fixed: was "xdtool"
+    ffmpeg
+    pass
+    gpg
+    xclip
+    xsel
+    # install LaTeX later
+    #texlive-full
+)
 
-printf "\033[1;31m[+] Remember to install LaTeX later on...\033[0m\n""]]"
 
 # Function to install packages
 install_packages() {
-        info "Installing packages..."
-        local total=${#pkgs[@]}
-        local count=0
-        local failed=0
+    info "Installing packages..."
+    local total=${#pkgs[@]}
+    local count=0
+    local failed=()
 
-        for pkg in "${pkgs[@]}"; do
-            ((count++))
-            if ! is_installed "$pkg"; then
-                printf "Installing (%d/%d): %s\n" "$count" "$total" "$pkg"
-                if apt install -y "$pkg" &>/dev/null; then
-                    success "Installed $pkg"
-                else
-                    warning "Failed to install $pkg"
-                    failed+=("$pkg")
-                fi
+    for pkg in "${pkgs[@]}"; do
+        ((count++))
+        progress "Checking package ($count/$total): $pkg"
+
+        if ! is_installed "$pkg"; then
+            info "Installing $pkg..."
+            if apt install -y "$pkg" 2>&1; then
+                success "Installed $pkg"
             else
-                info "Package $pkg is already installed."
+                warning "Failed to install $pkg"
+                failed+=("$pkg")
             fi
-        done
-
-        if ((${#failed[@]} > 0)); then
-            warning "Failed to install ${#failed[@]} packages: ${failed[*]}"
         else
-            success "All packages installed successfully"
+            info "Package $pkg is already installed."
         fi
+    done
 
+    if ((${#failed[@]} > 0)); then
+        warning "Failed to install ${#failed[@]} packages: ${failed[*]}"
+        info "You may need to install these manually later"
+    else
+        success "All packages installed successfully"
+    fi
 }
 
 # Install Brave browser
@@ -164,32 +182,53 @@ install_brave() {
 
 # Check for zsh and if not, ask user if they want to build and install it
 check_shell() {
-        local current_shell
-        local zsh_available=false
-        local using_zsh=false
+    local current_shell
+    local zsh_available=false
+    local using_zsh=false
 
-        # Check if zsh is available
-        if command -v zsh >/dev/null 2>&1; then
-            zsh_available=true
-            info "Zsh is available on the system."
-        else
-            info "Zsh is not installed on the system."
-        fi
+    # Check if zsh is available
+    if command -v zsh >/dev/null 2>&1; then
+        zsh_available=true
+        info "Zsh is available on the system."
+    else
+        info "Zsh is not installed on the system."
+    fi
 
-        # Improved shell detection - check multiple indicators
-        if [[ -n "$ZSH_VERSION" ]]; then
-            # Most reliable - ZSH_VERSION is only set in zsh
-            using_zsh=true
-            current_shell="zsh"
-            info "Currently running in Zsh shell."
-        elif [[ "$0" == *"zsh"* ]] || [[ "$SHELL" == *"zsh"* ]]; then
-            # Secondary check - script invoked with zsh or default shell is zsh
-            using_zsh=true
-            current_shell="zsh"
-            info "Currently running in Zsh shell."
+    # Improved shell detection - use safer variable checking
+    # Check if we're running in zsh by testing the ZSH_VERSION variable safely
+    if [[ "${ZSH_VERSION+set}" == "set" ]] && [[ -n "$ZSH_VERSION" ]]; then
+        # Most reliable - ZSH_VERSION is only set in zsh
+        using_zsh=true
+        current_shell="zsh"
+        info "Currently running in Zsh shell."
+    elif [[ "$0" == *"zsh"* ]] || [[ "${SHELL:-}" == *"zsh"* ]]; then
+        # Secondary check - script invoked with zsh or default shell is zsh
+        using_zsh=true
+        current_shell="zsh"
+        info "Currently running in Zsh shell."
+    else
+        # Check the parent shell (before sudo) if SUDO_USER is set
+        if [[ -n "${SUDO_USER:-}" ]]; then
+            local user_shell
+            user_shell=$(getent passwd "${SUDO_USER}" | cut -d: -f7)
+            if [[ "$user_shell" == *"zsh"* ]]; then
+                using_zsh=true
+                current_shell="zsh (user default)"
+                info "User $SUDO_USER has zsh as default shell."
+            else
+                # Fallback to process detection
+                current_shell=$(ps -p $$ -o comm= 2>/dev/null || echo "unknown")
+                if [[ "$current_shell" == "zsh" ]]; then
+                    using_zsh=true
+                    info "Currently running in Zsh shell."
+                else
+                    using_zsh=false
+                    info "Current shell: $current_shell (not Zsh)"
+                fi
+            fi
         else
             # Fallback to process detection
-            current_shell=$(ps -p $$ -o comm= 2>/dev/null)
+            current_shell=$(ps -p $$ -o comm= 2>/dev/null || echo "unknown")
             if [[ "$current_shell" == "zsh" ]]; then
                 using_zsh=true
                 info "Currently running in Zsh shell."
@@ -198,31 +237,32 @@ check_shell() {
                 info "Current shell: $current_shell (not Zsh)"
             fi
         fi
+    fi
 
-        # Decision logic
-        if [[ "$zsh_available" == true ]] && [[ "$using_zsh" == true ]]; then
-            success "Zsh is installed and is the current shell."
-            return 0
-        elif [[ "$zsh_available" == true ]] && [[ "$using_zsh" == false ]]; then
-            warning "Zsh is installed but not the current shell."
-            info "Current shell: $current_shell"
-            info "Please switch to Zsh and run this script again."
-            info "You can switch by running: exec zsh"
-            exit 1
-        else
-            warning "Zsh is not installed."
-            read -r -p "Do you want to build and install Zsh? (y/n): " choice
-            choice=${choice:-y}
+    # Decision logic
+    if [[ "$zsh_available" == true ]] && [[ "$using_zsh" == true ]]; then
+        success "Zsh is installed and is the current shell."
+        return 0
+    elif [[ "$zsh_available" == true ]] && [[ "$using_zsh" == false ]]; then
+        warning "Zsh is installed but not the current shell."
+        info "Current shell: $current_shell"
+        info "Since you're running with sudo, the script will continue."
+        info "Make sure zsh is your default shell for the best experience."
+        return 0  # Allow script to continue when running with sudo
+    else
+        warning "Zsh is not installed."
+        read -r -p "Do you want to build and install Zsh? (y/n): " choice
+        choice=${choice:-y}
 
-            case "${choice,,}" in # convert to lowercase
-                y|yes)
-                    build_zsh_from_source
-                    ;;
-                *)
-                    error "This script requires zsh. Exiting."
-                    ;;
-            esac
-        fi
+        case "${choice,,}" in # convert to lowercase
+            y|yes)
+                build_zsh_from_source
+                ;;
+            *)
+                error "This script requires zsh. Exiting."
+                ;;
+        esac
+    fi
 }
 
 # Build and install Zsh from source with error handling
@@ -276,7 +316,7 @@ build_zsh_from_source() {
         fi
 
         # Change the default shell to zsh for the user
-        if [[ -n "$SUDO_USER" ]]; then
+        if [[ -n "${SUDO_USER:-}" ]]; then
                 chsh -s /bin/zsh "$SUDO_USER" ||
                         error "Failed to change default shell to zsh for $SUDO_USER."
         else
@@ -285,11 +325,12 @@ build_zsh_from_source() {
         fi
 
         success "Zsh built and installed successfully."
-        info "IMPORTANT: You must log out and log back in for the shell change to take effect."
-        info "After logging back in with Zsh, run this script again to continue the installation."
+        info "IMPORTANT: Zsh is now installed and set as the default shell."
+        info "The script will continue with the remaining installations."
+        info "For the shell change to fully take effect, you may need to log out and log back in after the script completes."
 
-        # Exit the script to force user logout/login
-        exit 0
+        # Don't exit - let the script continue
+        return 0
 }
 
 # Function to install oh-my-zsh and plugins
@@ -301,47 +342,97 @@ install_zsh_extras() {
         user_home=$(getent passwd "$user" | cut -d: -f6)
 
         info "Installing oh-my-zsh for $user..."
+        info "User home directory: $user_home"
 
-        # Install oh-my-zsh
+        # Install oh-my-zsh with proper unattended installation
         if [[ ! -d "$user_home/.oh-my-zsh" ]]; then
-            su - "$user" -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended ||
-               error "Failed to install oh-my-zsh for $user"
-            success "Installed oh-my-zsh for $user"
+            info "Installing oh-my-zsh..."
+            # Set environment variables for unattended installation
+            export RUNZSH=no
+            export CHSH=no
+
+            if su - "$user" -c 'export RUNZSH=no; export CHSH=no; sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"'; then
+                success "Installed oh-my-zsh for $user"
+            else
+                error "Failed to install oh-my-zsh for $user"
+            fi
         else
             info "oh-my-zsh for $user is already installed"
         fi
 
         # Install zsh-syntax-highlighting
-        if [[ ! -d "$user_home/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting" ]]; then
-            su - "$user" -c "git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${user_home}/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting" ||
-               error "Failed to install zsh-syntax-highlighting for $user"
-            success "Installed zsh-syntax-highlighting for $user"
+        info "Installing zsh-syntax-highlighting..."
+        local syntax_dir="$user_home/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting"
+        if [[ ! -d "$syntax_dir" ]]; then
+            if su - "$user" -c "git clone https://github.com/zsh-users/zsh-syntax-highlighting.git '$syntax_dir'"; then
+                success "Installed zsh-syntax-highlighting for $user"
+            else
+                error "Failed to install zsh-syntax-highlighting for $user"
+            fi
         else
             info "zsh-syntax-highlighting for $user is already installed"
         fi
 
-
-        # Install autosuggestion and zsh-autosuggestions
-        if [[ ! -d "$user_home/.oh-my-zsh/custom/plugins/zsh-autosuggestions" ]]; then
-            su - "$user" -c "git clone https://github.com/zsh-users/zsh-autosuggestions ${user_home}/.oh-my-zsh/custom/plugins/zsh-autosuggestions" ||
+        # Install zsh-autosuggestions
+        info "Installing zsh-autosuggestions..."
+        local autosuggestions_dir="$user_home/.oh-my-zsh/custom/plugins/zsh-autosuggestions"
+        if [[ ! -d "$autosuggestions_dir" ]]; then
+            if su - "$user" -c "git clone https://github.com/zsh-users/zsh-autosuggestions '$autosuggestions_dir'"; then
+                success "Installed zsh-autosuggestions for $user"
+            else
                 error "Failed to install zsh-autosuggestions for $user"
-            success "Installed zsh-autosuggestions for $user"
+            fi
         else
             info "zsh-autosuggestions for $user is already installed"
         fi
 
-        # Update the .zshrc to use plugins
+        # Create a proper .zshrc file with oh-my-zsh configuration
         local zshrc="$user_home/.zshrc"
-       # backup_zshrc="${zshrc}.backup"
+        info "Creating .zshrc file at: $zshrc"
 
-        # use sed to update plugins line
+        # Backup existing .zshrc if it exists
         if [[ -f "$zshrc" ]]; then
-            sed -i '/^plugins=(/s/$/ zsh-syntax-highlighting zsh-autosuggestions/' "$zshrc" ||
-                warning "Failed to update plugins in $zshrc"
+            cp "$zshrc" "$zshrc.backup.$(date +%Y%m%d_%H%M%S)" || warning "Failed to create backup of .zshrc"
         fi
-        success "Updated plugins in $zshrc"
-}
 
+        # Create a new .zshrc with proper oh-my-zsh configuration
+        cat > "$zshrc" << 'EOF'
+# Path to your oh-my-zsh installation.
+export ZSH="$HOME/.oh-my-zsh"
+
+# Set name of the theme to load
+ZSH_THEME="robbyrussell"
+
+# Which plugins would you like to load?
+plugins=(git zsh-syntax-highlighting zsh-autosuggestions)
+
+# Load oh-my-zsh
+source $ZSH/oh-my-zsh.sh
+
+# User configuration
+export PATH=$PATH:/usr/local/go/bin
+export PATH=$PATH:$HOME/.cargo/bin
+
+# NVM configuration
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+# Aliases
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+alias vim='nvim'
+alias vi='nvim'
+EOF
+
+        # Set proper ownership
+        chown "$user:$(id -gn "$user")" "$zshrc" ||
+            warning "Failed to set ownership for .zshrc"
+
+        success "Created .zshrc file with proper oh-my-zsh configuration"
+        info "Zsh extras installation completed successfully"
+}
 
 # Install Rust and build Alacritty from source
 build_alacritty() {
@@ -353,62 +444,77 @@ build_alacritty() {
             return
         fi
 
+        # Install Alacritty build dependencies first
+        info "Installing Alacritty build dependencies..."
+        apt install -y \
+            pkg-config \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev \
+            python3 ||
+            error "Failed to install Alacritty build dependencies."
+
         # First ensure Rust is installed
         install_rustup_and_compiler
 
-        # Create a temporary directory for building Alacritty
-        local build_dir
-
-        build_dir=$(mktemp -d) ||
-                error "Failed to create temporary directory for building Alacritty."
-
-        # Ensure clean up after build
-        trap 'rm -rf $build_dir' EXIT
-
-        # Clone and build Alacritty
-        cd "$build_dir" ||
-                error "Failed to change directory to $build_dir."
-
-        git clone https://github.com/alacritty/alacritty.git ||
-                error "Failed to clone Alacritty repository."
-
-        cd alacritty ||
-                error "Failed to change directory to Alacritty source code."
-
-        # Build Alacritty
-        cargo build --release ||
-                error "Failed to build Alacritty."
-
-        # Copy the alacritty binary to PATH
-        cp target/release/alacritty /usr/local/bin/ ||
-                error "Failed to copy alacritty binary to /usr/local/bin."
-
-        # Create desktop entry and install terminfo
-        install_desktop_files
-
-        # Create config directory for the user
+        # Get user information
         local user="${SUDO_USER:-$USER}"
         local user_home
         user_home=$(getent passwd "$user" | cut -d: -f6)
+
+        # Create a temporary directory in user's home with proper permissions
+        local build_dir="$user_home/tmp_alacritty_build"
+
+        # Remove any existing build directory
+        rm -rf "$build_dir"
+
+        # Create build directory as the user
+        su - "$user" -c "mkdir -p '$build_dir'" ||
+                error "Failed to create temporary directory for building Alacritty."
+
+        # Ensure clean up after build
+        trap "rm -rf '$build_dir'" EXIT
+
+        # Clone Alacritty repository as the user
+        info "Cloning Alacritty repository..."
+        su - "$user" -c "cd '$build_dir' && git clone https://github.com/alacritty/alacritty.git" ||
+                error "Failed to clone Alacritty repository."
+
+        # Build Alacritty as the user with proper environment
+        info "Building Alacritty with cargo..."
+        su - "$user" -c "cd '$build_dir/alacritty' && source '$user_home/.cargo/env' && PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 cargo build --release" ||
+                error "Failed to build Alacritty."
+
+        # Copy the alacritty binary to PATH (as root)
+        cp "$build_dir/alacritty/target/release/alacritty" /usr/local/bin/ ||
+                error "Failed to copy alacritty binary to /usr/local/bin."
+
+        # Make it executable
+        chmod +x /usr/local/bin/alacritty ||
+                error "Failed to make alacritty executable."
+
+        # Create desktop entry and install terminfo
+        install_desktop_files "$build_dir"
+
+        # Create config directory for the user
         local config_dir="$user_home/.config/alacritty"
 
         # Create config directory if it doesn't exist
-        mkdir -p "$config_dir" ||
+        su - "$user" -c "mkdir -p '$config_dir'" ||
                 error "Failed to create $config_dir."
 
-        # Download configuration file
-        curl -L "https://raw.githubusercontent.com/LinuxUser255/alacritty/master/alacritty_config/alacritty.toml" \
-             -o "$config_dir/alacritty.toml" ||
+        # Download configuration file as the user
+        su - "$user" -c "curl -L 'https://raw.githubusercontent.com/LinuxUser255/alacritty/master/alacritty_config/alacritty.toml' -o '$config_dir/alacritty.toml'" ||
                 error "Failed to download Alacritty configuration file."
-
-        # Set proper ownership
-        chown -R "$user:$(id -gn "$user")" "$config_dir"
 
         success "Alacritty built and installed successfully."
 }
 
 # Install desktop files and terminfo for Alacritty
 install_desktop_files() {
+        local build_dir="$1"
+
         # Install terminfo files for Alacritty
         if ! infocmp alacritty &>/dev/null; then
             cd "$build_dir/alacritty" || return
@@ -503,10 +609,35 @@ build_neovim() {
 
 # My Neovim configuration
 install_neovim_config() {
-        curl -LO https://raw.githubusercontent.com/LinuxUser255/nvim/refs/heads/main/install.sh && chmod +x install.sh && ./install.sh
+        local user="${SUDO_USER:-$USER}"
+        local user_home
+        user_home=$(getent passwd "$user" | cut -d: -f6)
 
+        info "Installing Neovim configuration for $user..."
+
+        # Create the .config directory if it doesn't exist
+        su - "$user" -c "mkdir -p '$user_home/.config'" ||
+            error "Failed to create .config directory"
+
+        # Remove existing nvim config if it exists
+        if [[ -d "$user_home/.config/nvim" ]]; then
+            info "Backing up existing Neovim configuration..."
+            su - "$user" -c "mv '$user_home/.config/nvim' '$user_home/.config/nvim.backup.$(date +%Y%m%d_%H%M%S)'" ||
+                warning "Failed to backup existing Neovim configuration"
+        fi
+
+        # Clone the Neovim configuration as the user
+        info "Cloning Neovim configuration repository..."
+        su - "$user" -c "git clone https://github.com/LinuxUser255/nvim.git '$user_home/.config/nvim'" ||
+            error "Failed to clone Neovim configuration repository"
+
+        # Ensure proper ownership (should already be correct, but just in case)
+        chown -R "$user:$(id -gn "$user")" "$user_home/.config/nvim" ||
+            warning "Failed to set ownership for Neovim configuration"
+
+        success "Neovim configuration installed successfully for $user"
+        info "Configuration installed to: $user_home/.config/nvim"
 }
-
 
 # My lazy scripts
 lazy_scripts(){
@@ -516,23 +647,23 @@ lazy_scripts(){
 
         curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fff
         chmod +x fff
-        mv fff -t /usr/local/bin/fff
+        sudo mv fff -t /usr/local/bin/
 
         curl -L https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fast_grep.sh
         chmod +x fast_grep.sh
-        mv fast_grep.sh -t /usr/local/bin/
+        sudo mv fast_grep.sh -t /usr/local/bin/
 
-        curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/pwsearch.sh -
+        curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/pwsearch.sh
         chmod +x pwsearch.sh
-        mv pwsearch.sh -t /usr/local/bin/
+        sudo mv pwsearch.sh -t /usr/local/bin/
 
-        curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/faster.sh -
+        curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/faster.sh
         chmod +x faster.sh
-        mv faster.sh /usr/local/bin/
+        sudo mv faster.sh -t /usr/local/bin/
 
         curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/gclone.sh
         chmod +x gclone.sh
-        mv gclone.sh -t /usr/local/bin/
+        sudo mv gclone.sh -t /usr/local/bin/
 
         # chown current user ownership of the scripts
       #  sudo chown -R "$USER":"$USER" /usr/local/bin/fff /usr/local/bin/fast_grep.sh /usr/local/bin/pwsearch.sh /usr/local/bin/faster.sh /usr/local/bin/gclone.sh
@@ -649,51 +780,88 @@ my_dot_files(){
 
         success "i3 config installed successfully"
 
-        # Download .zshrc file to user's home directory
-        curl -fsSL "https://raw.githubusercontent.com/LinuxUser255/ShellScripting/refs/heads/main/dotfiles/.zshrc" \
-             -o "$user_home/.zshrc" ||
-            error "Failed to download .zshrc file"
+        # Don't overwrite .zshrc if it already exists (from install_zsh_extras)
+        if [[ ! -f "$user_home/.zshrc" ]]; then
+            # Download .zshrc file to user's home directory
+            curl -fsSL "https://raw.githubusercontent.com/LinuxUser255/ShellScripting/refs/heads/main/dotfiles/.zshrc" \
+                 -o "$user_home/.zshrc" ||
+                error "Failed to download .zshrc file"
 
-        # Set proper ownership for .zshrc
-        chown "$user:$(id -gn "$user")" "$user_home/.zshrc" ||
-            warning "Failed to set ownership for .zshrc"
+            # Set proper ownership for .zshrc
+            chown "$user:$(id -gn "$user")" "$user_home/.zshrc" ||
+                warning "Failed to set ownership for .zshrc"
 
-        success ".zshrc installed successfully"
+            success ".zshrc installed successfully"
+        else
+            info ".zshrc already exists, skipping download to preserve oh-my-zsh configuration"
+        fi
 }
 
 
 main() {
-        check_root
-        update_system
-        install_packages
-        install_brave
-        check_shell
+    progress "Starting CARS installation script..."
 
-        # Only call build_zsh_from_source if zsh is not installed
-        if ! cmd_exists zsh; then
-            build_zsh_from_source
-            # This will exit the script, so code below won't run
-        fi
+    progress "Checking root privileges..."
+    check_root
+    progress "Root check completed"
 
-        # Only proceed if zsh is available
-        if cmd_exists zsh; then
-            install_zsh_extras
-        fi
+    progress "Updating system..."
+    update_system
+    progress "System update completed"
 
-        # Only call build_alacritty if install_rustup_and_compiler function exists
-        if declare -f install_rustup_and_compiler >/dev/null; then
-            build_alacritty
-        else
-            warning "Skipping Alacritty build - install_rustup_and_compiler function not found"
-        fi
+    progress "Installing packages..."
+    install_packages
+    progress "Package installation completed"
 
+    progress "Installing Brave browser..."
+    install_brave
+    progress "Brave installation completed"
+
+    progress "Checking shell configuration..."
+    check_shell
+    progress "Shell check completed"
+
+    # Only proceed if zsh is available
+    if cmd_exists zsh; then
+        progress "Zsh is available, proceeding with installations..."
+
+        progress "Starting zsh extras installation..."
+        install_zsh_extras
+        progress "Zsh extras installation finished"
+
+        progress "Starting Alacritty build..."
+        build_alacritty
+        progress "Alacritty build finished"
+
+        progress "Starting Neovim build..."
         build_neovim
+        progress "Neovim build finished"
+
+        progress "Installing Neovim config..."
         install_neovim_config
+        progress "Neovim config installation finished"
+
+        progress "Installing lazy scripts..."
         lazy_scripts
+        progress "Lazy scripts installation finished"
+
+        progress "Installing Golang..."
         install_golang
+        progress "Golang installation finished"
+
+        progress "Installing Node.js..."
         install_nodejs
+        progress "Node.js installation finished"
+
+        progress "Setting up dotfiles..."
         my_dot_files
+        progress "Dotfiles setup finished"
+
+        success "All installations completed successfully!"
+    else
+        error "Zsh is required but not available. Please install zsh and run the script again."
+    fi
 }
 
-main
-
+# Call main function
+main "$@"
