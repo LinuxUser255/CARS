@@ -8,6 +8,7 @@
 # It is inspired by Dylan Araps Pure Bash Bible & his Neofectch shell script.
 # https://github.com/LinuxUser255/pure-bash-bible
 # https://github.com/dylanaraps/neofetch
+# TODO: Fix the following Failed to install: mullvad, chromium, x11-server-utils, setxkbmap, xdtools
 
 # Text formatting
 readonly BOLD="\e[1m"
