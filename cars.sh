@@ -9,10 +9,6 @@
 # https://github.com/LinuxUser255/pure-bash-bible
 # https://github.com/dylanaraps/neofetch
 
-# Strict mode
-set -euo pipefail
-IFS=$'\n\t'
-
 # Text formatting
 readonly BOLD="\e[1m"
 readonly RESET="\e[0m"
@@ -73,35 +69,37 @@ cmd_exists() {
 
 
 pkgs=(
-     vim
-     git
-     curl
-     gcc
-     make
-     cmake
-     mulvad
-     ripgrep
-     python3-pip
-     exuberant-ctags
-     ack-grep
-     build-essential
-     arandr
-     chromium
-     ninja-build
-     gettext
-     unzip
-     x11-server-utils
-     i3
-     setxkbmap
-     xdtools
-     ffmpeg
-     pass
-     gpg
-     xclip
-     xsel
-     # install LaTeX later
-     #texlive-full
+         vim
+         git
+         curl
+         gcc
+         make
+         cmake
+         mulvad
+         ripgrep
+         python3-pip
+         exuberant-ctags
+         ack-grep
+         build-essential
+         arandr
+         chromium
+         ninja-build
+         gettext
+         unzip
+         x11-server-utils
+         i3
+         setxkbmap
+         xdtools
+         ffmpeg
+         pass
+         gpg
+         xclip
+         xsel
+         # install LaTeX later
+         #texlive-full
  )
+
+printf "\033[1;31m[+] Remember to install LaTeX later on...\033[0m\n""]]"
 
 # Function to install packages
 install_packages() {
@@ -164,32 +162,61 @@ install_brave() {
 }
 
 # Check for zsh and if not, ask user if they want to build and install it
-check_shell () {
-        # Either zsh is not installed or not the current shell is not zsh
-        if ! [ "$(command -v zsh)" ] || [ "$(ps -p $$ -o comm=)" != "zsh" ]; then
-            warning "ZSH is either not installed or not the current shell."
+check_shell() {
+        local current_shell
+        local zsh_available=false
+        local using_zsh=false
 
+        # Check if zsh is available
+        if command -v zsh >/dev/null 2>&1; then
+            zsh_available=true
+            info "Zsh is available on the system."
+        else
+            info "Zsh is not installed on the system."
+        fi
+
+        # Check current shell using multiple methods
+        current_shell=$(ps -p $$ -o comm= 2>/dev/null)
+
+        # Alternative methods to detect current shell
+        if [[ "$current_shell" == "zsh" ]] || [[ "$SHELL" == *"zsh"* ]] || [[ -n "$ZSH_VERSION" ]]; then
+            using_zsh=true
+            info "Currently running in Zsh shell."
+        else
+            info "Current shell: $current_shell (not Zsh)"
+        fi
+
+        # Decision logic
+        if [[ "$zsh_available" == true ]] && [[ "$using_zsh" == true ]]; then
+            success "Zsh is installed and is the current shell."
+            return 0
+        elif [[ "$zsh_available" == true ]] && [[ "$using_zsh" == false ]]; then
+            warning "Zsh is installed but not the current shell."
+            info "Current shell: $current_shell"
+            info "Please switch to Zsh and run this script again."
+            info "You can switch by running: exec zsh"
+            exit 1
+        else
+            warning "Zsh is not installed."
             read -r -p "Do you want to build and install Zsh? (y/n): " choice
-            choice=${choice:-Y}
+            choice=${choice:-y}
 
             case "${choice,,}" in # convert to lowercase
                 y|yes)
                     build_zsh_from_source
                     ;;
                 *)
-                    error "This script requires zsh as the current shell. Exiting."
+                    error "This script requires zsh. Exiting."
                     ;;
-        esac
-    else
-        success "Zsh is already installed and is the current shell."
-    fi
+            esac
+        fi
 }
 
 # Build and install Zsh from source with error handling
 build_zsh_from_source() {
         # zsh_version=5.9
         info "Building Zsh from source..."
-        apt install -y build-essential ncurses-dev libncursesw5-dev yodl ||
+        apt install -y build-essential ncurses-dev libncursesw5-dev yodl autoconf autotools-dev ||
                 error "Failed to install required dependencies for building Zsh."
 
         # Create a temporary directory for building Zsh
@@ -463,7 +490,7 @@ build_neovim() {
 
 # My Neovim configuration
 install_neovim_config() {
-    curl -LO https://raw.githubusercontent.com/LinuxUser255/nvim/refs/heads/main/install.sh && chmod +x install.sh && ./install.sh
+        curl -LO https://raw.githubusercontent.com/LinuxUser255/nvim/refs/heads/main/install.sh && chmod +x install.sh && ./install.sh
 
 }
 
@@ -474,17 +501,28 @@ lazy_scripts(){
         # print message in bold blue that says "Curling lasy scripts..."
         printf "\e[1m\e[34mCurling lazy scripts...\e[0m\n"
 
-        curl -L https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fff -o /usr/local/bin/fff
-        curl -L https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fast_grep.sh -o /usr/local/bin/fast_grep.sh
-        curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/pwsearch.sh -o /usr/local/bin/pwsearch.sh
-        curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/faster.sh -o /usr/local/bin/faster.sh
-        curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/gclone.sh -o /usr/local/bin/gclone.sh
+        curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fff
+        chmod +x fff
+        mv fff -t /usr/local/bin/fff
 
-        # Make all scripts executable
-        chmod +x /usr/local/bin/fff /usr/local/bin/fast_grep.sh /usr/local/bin/pwsearch.sh /usr/local/bin/faster.sh /usr/local/bin/gclone.sh
+        curl -L https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fast_grep.sh
+        chmod +x fast_grep.sh
+        mv fast_grep.sh -t /usr/local/bin/
+
+        curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/pwsearch.sh -
+        chmod +x pwsearch.sh
+        mv pwsearch.sh -t /usr/local/bin/
+
+        curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/faster.sh -
+        chmod +x faster.sh
+        mv faster.sh /usr/local/bin/
+
+        curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/gclone.sh
+        chmod +x gclone.sh
+        mv gclone.sh -t /usr/local/bin/
 
         # chown current user ownership of the scripts
-        sudo chown -R "$USER":"$USER" /usr/local/bin/fff /usr/local/bin/fast_grep.sh /usr/local/bin/pwsearch.sh /usr/local/bin/faster.sh /usr/local/bin/gclone.sh
+      #  sudo chown -R "$USER":"$USER" /usr/local/bin/fff /usr/local/bin/fast_grep.sh /usr/local/bin/pwsearch.sh /usr/local/bin/faster.sh /usr/local/bin/gclone.sh
 }
 
 # install Golang
@@ -544,6 +582,37 @@ install_nodejs() {
         success "Node.js installed successfully for $user"
 }
 
+# Install Rust and Cargo compiler
+install_rustup_and_compiler() {
+        info "Installing Rust and Cargo..."
+
+        # Check if Rust is already installed
+        if cmd_exists rustc && cmd_exists cargo; then
+            info "Rust and Cargo are already installed."
+            return
+        fi
+
+        local user="${SUDO_USER:-$USER}"
+        local user_home
+        user_home=$(getent passwd "$user" | cut -d: -f6)
+
+        # Install Rust using rustup as the user
+        info "Installing Rust via rustup for $user..."
+        su - "$user" -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y' ||
+            error "Failed to install Rust"
+
+        # Source the cargo environment
+        su - "$user" -c 'source "$HOME/.cargo/env"' ||
+            warning "Failed to source cargo environment"
+
+        # Verify installation
+        info "Verifying Rust installation..."
+        su - "$user" -c 'source "$HOME/.cargo/env"; echo "Rust version: $(rustc --version)"; echo "Cargo version: $(cargo --version)"' ||
+            warning "Failed to verify Rust installation"
+
+        success "Rust and Cargo installed successfully for $user"
+}
+
 my_dot_files(){
         # i3 window manager config file
         local user="${SUDO_USER:-$USER}"
@@ -581,7 +650,6 @@ my_dot_files(){
 
 
 main() {
-
         check_root
         update_system
         install_packages
@@ -589,7 +657,6 @@ main() {
         check_shell
 
         # Only call build_zsh_from_source if zsh is not installed
-        # The function exits the script, so we need to handle this differently
         if ! cmd_exists zsh; then
             build_zsh_from_source
             # This will exit the script, so code below won't run
@@ -600,9 +667,6 @@ main() {
             install_zsh_extras
         fi
 
-        build_neovim
-        install_neovim_config
-
         # Only call build_alacritty if install_rustup_and_compiler function exists
         if declare -f install_rustup_and_compiler >/dev/null; then
             build_alacritty
@@ -610,6 +674,8 @@ main() {
             warning "Skipping Alacritty build - install_rustup_and_compiler function not found"
         fi
 
+        build_neovim
+        install_neovim_config
         lazy_scripts
         install_golang
         install_nodejs
