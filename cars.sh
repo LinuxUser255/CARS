@@ -175,15 +175,27 @@ check_shell() {
             info "Zsh is not installed on the system."
         fi
 
-        # Check current shell using multiple methods
-        current_shell=$(ps -p $$ -o comm= 2>/dev/null)
-
-        # Alternative methods to detect current shell
-        if [[ "$current_shell" == "zsh" ]] || [[ "$SHELL" == *"zsh"* ]] || [[ -n "$ZSH_VERSION" ]]; then
+        # Improved shell detection - check multiple indicators
+        if [[ -n "$ZSH_VERSION" ]]; then
+            # Most reliable - ZSH_VERSION is only set in zsh
             using_zsh=true
+            current_shell="zsh"
+            info "Currently running in Zsh shell."
+        elif [[ "$0" == *"zsh"* ]] || [[ "$SHELL" == *"zsh"* ]]; then
+            # Secondary check - script invoked with zsh or default shell is zsh
+            using_zsh=true
+            current_shell="zsh"
             info "Currently running in Zsh shell."
         else
-            info "Current shell: $current_shell (not Zsh)"
+            # Fallback to process detection
+            current_shell=$(ps -p $$ -o comm= 2>/dev/null)
+            if [[ "$current_shell" == "zsh" ]]; then
+                using_zsh=true
+                info "Currently running in Zsh shell."
+            else
+                using_zsh=false
+                info "Current shell: $current_shell (not Zsh)"
+            fi
         fi
 
         # Decision logic
