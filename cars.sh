@@ -191,6 +191,10 @@ build_alacritty() {
         cd "$build_dir" || error "cd failed"
         git clone https://github.com/alacritty/alacritty.git || error "clone failed"
         cd alacritty || error "cd alacritty failed"
+        git fetch --tags || error "fetch tags failed"
+        local latest_tag
+        latest_tag=$(git tag -l 'v*' | sort -V | tail -n1 || true)
+        [ -n "$latest_tag" ] && git checkout "$latest_tag" || info "No version tag found; building default branch"
         cargo build --release || error "cargo build failed"
         cp target/release/alacritty /usr/local/bin/ || error "copy binary failed"
         install_desktop_files "$PWD"
