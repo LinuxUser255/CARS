@@ -168,17 +168,36 @@ install_zsh_extras() {
         local user_home
         user_home=$(getent passwd "$user" | cut -d: -f6)
         info "Installing oh-my-zsh for $user..."
-        if [[ ! -d "$user_home/.oh-my-zsh" ]]; then
-                su - "$user" -c "git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git ~/.oh-my-zsh" || error "oh-my-zsh install failed"
-                success "Installed oh-my-zsh for $user"
-        else
-                info "oh-my-zsh already installed"
-        fi
+
+        local act_omz
+        case $([[ -d "$user_home/.oh-my-zsh" ]] && echo present || echo missing) in
+                present) : "KEEP" ;;
+                *)       : "INSTALL" ;;
+        esac
+        act_omz="$_"
+        [[ "$act_omz" == INSTALL ]] && su - "$user" -c "git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git ~/.oh-my-zsh" && success "Installed oh-my-zsh for $user" || info "oh-my-zsh already installed"
+
         [[ -f "$user_home/.zshrc" ]] || su - "$user" -c "cp ~/.oh-my-zsh/templates/zshrc.zsh-template ~/.zshrc" || warning "create .zshrc failed"
+
         local -a pids=()
-        [[ ! -d "$user_home/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting" ]] && { su - "$user" -c "git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting" & pids+=($!); } || info "zsh-syntax-highlighting already installed"
-        [[ ! -d "$user_home/.oh-my-zsh/custom/plugins/zsh-autosuggestions" ]] && { su - "$user" -c "git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions" & pids+=($!); } || info "zsh-autosuggestions already installed"
+        local act_syn
+        case $([[ -d "$user_home/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting" ]] && echo present || echo missing) in
+                present) : "KEEP" ;;
+                *)       : "INSTALL" ;;
+        esac
+        act_syn="$_"
+        [[ "$act_syn" == INSTALL ]] && { su - "$user" -c "git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting" & pids+=($!); } || info "zsh-syntax-highlighting already installed"
+
+        local act_sug
+        case $([[ -d "$user_home/.oh-my-zsh/custom/plugins/zsh-autosuggestions" ]] && echo present || echo missing) in
+                present) : "KEEP" ;;
+                *)       : "INSTALL" ;;
+        esac
+        act_sug="$_"
+        [[ "$act_sug" == INSTALL ]] && { su - "$user" -c "git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions" & pids+=($!); } || info "zsh-autosuggestions already installed"
+
         ((${#pids[@]})) && wait "${pids[@]}"
+
         local zshrc="$user_home/.zshrc"
         [[ -f "$zshrc" ]] && {
                 grep -q '^plugins=(' "$zshrc" || echo 'plugins=(git zsh-autosuggestions zsh-syntax-highlighting)' >> "$zshrc"
