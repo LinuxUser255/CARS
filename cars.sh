@@ -88,16 +88,12 @@ pkgs=(
 
 install_packages() {
         info "Installing packages..."
-        local total=${#pkgs[@]}
-        local count=0
-        local -a failed=()
+        local -a to_install=()
         for pkg in "${pkgs[@]}"; do
-                ((count++))
-                is_installed "$pkg" && { info "Package $pkg is already installed."; continue; }
-                printf "Installing (%d/%d): %s\n" "$count" "$total" "$pkg"
-                apt-get install -y "$pkg" &>/dev/null && success "Installed $pkg" || { warning "Failed to install $pkg"; failed+=("$pkg"); }
+                is_installed "$pkg" && { info "Package $pkg is already installed."; continue; } || to_install+=("$pkg")
         done
-        ((${#failed[@]} > 0)) && warning "Failed to install ${#failed[@]} packages: ${failed[*]}" || success "All packages installed successfully"
+        ((${#to_install[@]}==0)) && { success "All packages already installed"; return 0; }
+        apt-get install -y "${to_install[@]}" && success "Installed: ${to_install[*]}" || error "Failed to install: ${to_install[*]}"
 }
 
 check_shell () {
@@ -134,7 +130,7 @@ build_zsh_from_source() {
         make -j "$(nproc)" || error "make failed"
         make check || warning "some tests failed"
         make install || error "install failed"
-        grep -q "^/bin/zsh$" /etc/shells || echo "/bin/zsh" | tee -a /etc/shells >/dev/null || error "add to /etc/shells failed"
+        rg -F -x -q "/bin/zsh" /etc/shells || echo "/bin/zsh" | tee -a /etc/shells >/dev/null || error "add to /etc/shells failed"
         if [[ -n "$SUDO_USER" ]]; then
                 chsh -s /bin/zsh "$SUDO_USER" || warning "chsh failed for $SUDO_USER"
         else
@@ -157,25 +153,17 @@ install_zsh_extras() {
                 info "oh-my-zsh already installed"
         fi
         [[ -f "$user_home/.zshrc" ]] || su - "$user" -c "cp ~/.oh-my-zsh/templates/zshrc.zsh-template ~/.zshrc" || warning "create .zshrc failed"
-        if [[ ! -d "$user_home/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting" ]]; then
-                su - "$user" -c "git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting" || error "syntax-highlighting install failed"
-                success "Installed zsh-syntax-highlighting for $user"
-        else
-                info "zsh-syntax-highlighting already installed"
-        fi
-        if [[ ! -d "$user_home/.oh-my-zsh/custom/plugins/zsh-autosuggestions" ]]; then
-                su - "$user" -c "git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions" || error "autosuggestions install failed"
-                success "Installed zsh-autosuggestions for $user"
-        else
-                info "zsh-autosuggestions already installed"
-        fi
+        local -a pids=()
+        [[ ! -d "$user_home/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting" ]] && { su - "$user" -c "git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting" & pids+=($!); } || info "zsh-syntax-highlighting already installed"
+        [[ ! -d "$user_home/.oh-my-zsh/custom/plugins/zsh-autosuggestions" ]] && { su - "$user" -c "git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions" & pids+=($!); } || info "zsh-autosuggestions already installed"
+        ((${#pids[@]})) && wait "${pids[@]}"
         local zshrc="$user_home/.zshrc"
-        if [[ -f "$zshrc" ]]; then
+        [[ -f "$zshrc" ]] && {
                 grep -q '^plugins=(' "$zshrc" || echo 'plugins=(git zsh-autosuggestions zsh-syntax-highlighting)' >> "$zshrc"
-                grep -q 'zsh-autosuggestions' "$zshrc" || sed -i 's/^plugins=(/plugins=(zsh-autosuggestions /' "$zshrc"
-                grep -q 'zsh-syntax-highlighting' "$zshrc" || sed -i 's/^plugins=(/plugins=(zsh-syntax-highlighting /' "$zshrc"
+                rg -F -q 'zsh-autosuggestions' "$zshrc" || sed -i 's/^plugins=(/plugins=(zsh-autosuggestions /' "$zshrc"
+                rg -F -q 'zsh-syntax-highlighting' "$zshrc" || sed -i 's/^plugins=(/plugins=(zsh-syntax-highlighting /' "$zshrc"
                 sed -i -E 's/^plugins=\((.*)zsh-syntax-highlighting(.*)\)/plugins=(\1\2 zsh-syntax-highlighting)/' "$zshrc" || true
-        fi
+        }
         chown "$user:$(id -gn "$user")" "$zshrc" 2>/dev/null || true
         success "Updated plugins in $zshrc"
 }
@@ -237,7 +225,7 @@ build_neovim() {
         git clone https://github.com/neovim/neovim.git || error "clone failed"
         cd neovim || error "cd failed"
         git checkout stable || error "checkout failed"
-        make CMAKE_BUILD_TYPE=RelWithDebInfo || error "make failed"
+        make -j"$(nproc)" CMAKE_BUILD_TYPE=RelWithDebInfo || error "make failed"
         make install || error "install failed"
         info "Neovim built and installed successfully."
 }
@@ -270,11 +258,13 @@ fastfetch_build(){
 
 lazy_scripts(){
         printf "\e[1m\e[34mCurling lazy scripts...\e[0m\n"
-        curl -fsSL -o /usr/local/bin/fff https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fff
-        curl -fsSL -o /usr/local/bin/fast_grep.sh https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fast_grep.sh
-        curl -fsSL -o /usr/local/bin/pwsearch.sh https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/pwsearch.sh
-        curl -fsSL -o /usr/local/bin/faster.sh https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/faster.sh
-        curl -fsSL -o /usr/local/bin/gclone.sh https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/gclone.sh
+        local -a pids=()
+        curl -fsSL -o /usr/local/bin/fff https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fff & pids+=($!)
+        curl -fsSL -o /usr/local/bin/fast_grep.sh https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fast_grep.sh & pids+=($!)
+        curl -fsSL -o /usr/local/bin/pwsearch.sh https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/pwsearch.sh & pids+=($!)
+        curl -fsSL -o /usr/local/bin/faster.sh https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/faster.sh & pids+=($!)
+        curl -fsSL -o /usr/local/bin/gclone.sh https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/gclone.sh & pids+=($!)
+        ((${#pids[@]})) && wait "${pids[@]}"
         chmod +x /usr/local/bin/fff /usr/local/bin/fast_grep.sh /usr/local/bin/pwsearch.sh /usr/local/bin/faster.sh /usr/local/bin/gclone.sh
         chown -R "${SUDO_USER:-$USER}:$(id -gn "${SUDO_USER:-$USER}")" /usr/local/bin/fff /usr/local/bin/fast_grep.sh /usr/local/bin/pwsearch.sh /usr/local/bin/faster.sh /usr/local/bin/gclone.sh || true
 }
