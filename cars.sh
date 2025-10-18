@@ -99,13 +99,35 @@ install_packages() {
 check_shell () {
         local user
         user="${SUDO_USER:-$USER}"
-        local user_shell
-        user_shell=$(getent passwd "$user" | cut -d: -f7 || true)
+        local shell_path
+        shell_path=$(getent passwd "$user" | cut -d: -f7 || true)
+        local shell_name
+        shell_name="${shell_path##*/}"
         cmd_exists zsh || { warning "Zsh is not installed yet."; return 0; }
-        [[ "$user_shell" == "/bin/zsh" ]] && { info "Zsh is already the default shell for $user."; return 0; }
-        info "Setting default shell to zsh for $user..."
-        chsh -s /bin/zsh "$user" && success "Default shell changed to zsh for $user" || warning "Failed to change default shell for $user"
-        info "You may need to log out and back in for the default shell change to take effect."
+        local action
+        case "$shell_name" in
+                zsh)
+                        : "KEEP"
+                ;;
+                bash|sh|dash|ash|fish|tcsh|ksh|zsh*)
+                        : "CHSH"
+                ;;
+                *)
+                        : "CHSH"
+                ;;
+        esac
+        action="$_"
+        case "$action" in
+                KEEP)
+                        info "Zsh is already the default shell for $user."
+                        return 0
+                ;;
+                CHSH)
+                        info "Setting default shell to zsh for $user..."
+                        chsh -s /bin/zsh "$user" && success "Default shell changed to zsh for $user" || warning "Failed to change default shell for $user"
+                        info "You may need to log out and back in for the default shell change to take effect."
+                ;;
+        esac
 }
 
 build_zsh_from_source() {
