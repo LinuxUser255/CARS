@@ -1,17 +1,10 @@
-
-# CODING & SCRITPTING STYLE GUIDE FOR `CARS.SH`
+# CODING & SCRITPTING STYLE GUIDE FOR `cars.sh`
 
 
 ## Table of Contents:
-    1. Code Golf
-    2. Processes Level Parallelism
-    3. Appearance
-
-
-**Instructions**
-* Apply and use the two styles when refactoring and writing `cars.sh`
-- Use the Code Golf Style where appropriate
-- Use the Processes Level Parallelism when saving resources and making the code faster is possible.
+    1. [Code Golf Style](#1-code-golf-syle)
+    2. [Processes Level Parallelism](#2-processes-level-parallelism)
+    3. [Appearance](#3-appearance--aestetics)
 
 
 <br>
@@ -148,7 +141,7 @@ get_shell() {
     case ${shell_name:=${SHELL##*/}} in
         bash)
             [[ $BASH_VERSION ]] ||
-                BASH_VERSION=$("$SHELL" -c "printf %s \"\$BASH_VERSION\"")
+                BASH_VERSION=$("$SHELL" -c "printf %s "\$BASH_VERSION"")
 
             shell+=${BASH_VERSION/-*}
         ;;
@@ -156,7 +149,7 @@ get_shell() {
         sh|ash|dash|es) ;;
 
         *ksh)
-            shell+=$("$SHELL" -c "printf %s \"\$KSH_VERSION\"")
+            shell+=$("$SHELL" -c "printf %s "\$KSH_VERSION"")
             shell=${shell/ * KSH}
             shell=${shell/version}
         ;;
@@ -165,7 +158,7 @@ get_shell() {
             if [[ $OIL_VERSION ]]; then
                 shell+=$OIL_VERSION
             else
-                shell+=$("$SHELL" -c "printf %s \"\$OIL_VERSION\"")
+                shell+=$("$SHELL" -c "printf %s "\$OIL_VERSION"")
             fi
         ;;
 
@@ -201,7 +194,7 @@ get_shell() {
 
 ```
 
-# 2. PROCESSES LEVE PARALLELISM
+# 2. Processes Level Parallelism
 ---------------------------------------
 
 ## Some concise and practical guidelines for writing efficient, fast, and lightweight Bash/Shell scripts
@@ -835,6 +828,5 @@ using a PID queue and `wait`. It’s especially valuable when:
 
 # 3. Appearance & aestetics
     - use 8 spaces for the function body
-
 
 
