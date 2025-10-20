@@ -198,7 +198,6 @@ get_shell() {
 <br>
 
 # 2. Processes Level Parallelism
----------------------------------------
 
 ## Some concise and practical guidelines for writing efficient, fast, and lightweight Bash/Shell scripts
 
