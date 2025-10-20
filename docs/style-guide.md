@@ -2,9 +2,10 @@
 
 
 ## Table of Contents:
-    1. [Code Golf Style](#1-code-golf-syle)
-    2. [Processes Level Parallelism](#2-processes-level-parallelism)
-    3. [Appearance](#3-appearance--aestetics)
+
+ 1. [Code Golf Style](#1-code-golf-syle)
+ 2. [Processes Level Parallelism](#2-processes-level-parallelism)
+ 3. [Appearance](#3-appearance--aestetics)
 
 
 <br>
