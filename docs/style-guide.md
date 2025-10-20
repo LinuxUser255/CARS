@@ -195,6 +195,8 @@ get_shell() {
 
 ```
 
+<br>
+
 # 2. Processes Level Parallelism
 ---------------------------------------
 
