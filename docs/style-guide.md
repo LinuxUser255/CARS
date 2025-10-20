@@ -828,7 +828,7 @@ using a PID queue and `wait`. It’s especially valuable when:
 
 <br>
 
-# 3. Appearance & aestetics
+# 3. Appearance & aesthetics
 
     ### use 8 spaces for the function body
 
