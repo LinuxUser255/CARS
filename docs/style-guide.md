@@ -201,9 +201,8 @@ get_shell() {
 
 ## Some concise and practical guidelines for writing efficient, fast, and lightweight Bash/Shell scripts
 
-## especially for system tasks or automation:
+**especially for system tasks or automation:**
 
----
 
 ## 🔧 1. **General Principles**
 
