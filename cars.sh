@@ -200,7 +200,7 @@ install_zsh_extras() {
 
         local zshrc="$user_home/.zshrc"
         [[ -f "$zshrc" ]] && {
-                rg -q '^plugins=\(' "$zshrc" || echo 'plugins=(git zsh-autosuggestions zsh-syntax-highlighting)' >> "$zshrc"
+                rg -q '^plugins=(' "$zshrc" || echo 'plugins=(git zsh-autosuggestions zsh-syntax-highlighting)' >> "$zshrc"
                 rg -F -q 'zsh-autosuggestions' "$zshrc" || sed -i 's/^plugins=(/plugins=(zsh-autosuggestions /' "$zshrc"
                 rg -F -q 'zsh-syntax-highlighting' "$zshrc" || sed -i 's/^plugins=(/plugins=(zsh-syntax-highlighting /' "$zshrc"
                 sed -i -E 's/^plugins=\((.*)zsh-syntax-highlighting(.*)\)/plugins=(\1\2 zsh-syntax-highlighting)/' "$zshrc" || true
