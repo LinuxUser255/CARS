@@ -830,7 +830,7 @@ using a PID queue and `wait`. It’s especially valuable when:
 
 # 3. Appearance & aesthetics
 
-    ### use 8 spaces for the function body
+### use 8 spaces for the function body
 
 
 <br>
