@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+# Remove 'set -e' to allow script to continue on errors
+# Keep other safety settings
+set -uo pipefail
 IFS=$'\n\t'
 
 readonly BOLD="\e[1m"
@@ -18,6 +20,12 @@ print_msg() {
 
 error(){
         print_msg "$RED" "Error: $1" >&2
+        # Don't exit, just log the error
+        return 1
+}
+
+fatal_error(){
+        print_msg "$RED" "Fatal Error: $1" >&2
         exit 1
 }
 
@@ -34,7 +42,7 @@ warning(){
 }
 
 check_root () {
-        [ "$(id -u)" -ne 0 ] && echo "Please run this script as root." && exit 1
+        [ "$(id -u)" -ne 0 ] && { echo "Please run this script as root."; exit 1; }
 }
 
 is_installed() {
@@ -59,15 +67,14 @@ pkgs=(
      ripgrep
      python3-pip
      universal-ctags
-     ack-grep
+     ack  # Changed from ack-grep
      build-essential
      arandr
      chromium
      ninja-build
      gettext
      unzip
-     x11-xserver-utils
-     setxkbmap
+     x11-xserver-utils  # This includes setxkbmap
      xdotool
      ffmpeg
      pass
@@ -78,7 +85,7 @@ pkgs=(
      pkg-config
      cmake
      libfontconfig1-dev
-     libfreetype6-dev
+     libfreetype-dev  # Changed from libfreetype6-dev
      libxcb-xfixes0-dev
      libxkbcommon-dev
      libxcb1-dev
@@ -89,11 +96,50 @@ pkgs=(
 install_packages() {
         info "Installing packages..."
         local -a to_install=()
+        local -a failed_packages=()
+        
         for pkg in "${pkgs[@]}"; do
                 is_installed "$pkg" && { info "Package $pkg is already installed."; continue; } || to_install+=("$pkg")
         done
+        
         ((${#to_install[@]}==0)) && { success "All packages already installed"; return 0; }
-        apt-get install -y "${to_install[@]}" && success "Installed: ${to_install[*]}" || error "Failed to install: ${to_install[*]}"
+        
+        # Try batch installation first
+        if ! apt-get install -y "${to_install[@]}" 2>/dev/null; then
+                warning "Batch installation failed, trying individual packages..."
+                
+                # Install packages one by one
+                for pkg in "${to_install[@]}"; do
+                        info "Attempting to install: $pkg"
+                        if apt-get install -y "$pkg" 2>/dev/null; then
+                                success "Installed: $pkg"
+                        else
+                                warning "Failed to install: $pkg (package might not exist or have a different name)"
+                                failed_packages+=("$pkg")
+                        fi
+                done
+        else
+                success "Batch installation completed successfully"
+        fi
+        
+        # Handle critical tools that failed
+        for pkg in "${failed_packages[@]}"; do
+                case "$pkg" in
+                        ripgrep)
+                                info "ripgrep not found in repos, will build from source later"
+                                ;;
+                esac
+        done
+        
+        # Report results
+        if ((${#failed_packages[@]} > 0)); then
+                warning "The following packages could not be installed: ${failed_packages[*]}"
+                warning "The script will continue with available packages."
+        else
+                success "All requested packages installed successfully!"
+        fi
+        
+        return 0  # Always return success to continue script
 }
 
 check_shell () {
@@ -130,17 +176,70 @@ check_shell () {
         esac
 }
 
+build_ripgrep() {
+        info "Building ripgrep from source..."
+        cmd_exists rg && { info "ripgrep is already installed."; return 0; }
+        
+        # Ensure Rust is installed
+        if ! cmd_exists cargo; then
+                info "Installing Rust toolchain for ripgrep build..."
+                curl https://sh.rustup.rs -sSf | sh -s -- -y || { warning "Failed to install Rust"; return 1; }
+                export PATH="$HOME/.cargo/bin:$PATH"
+                source "$HOME/.cargo/env" 2>/dev/null || true
+        fi
+        
+        local build_dir
+        build_dir=$(mktemp -d) || { warning "Failed to create temp dir for ripgrep"; return 1; }
+        trap 'rm -rf "$build_dir"' EXIT
+        
+        cd "$build_dir" || { warning "cd failed"; return 1; }
+        
+        # Method 1: Try downloading pre-built binary first
+        info "Attempting to download pre-built ripgrep binary..."
+        local rg_version="14.1.0"
+        local rg_archive="ripgrep-${rg_version}-x86_64-unknown-linux-musl.tar.gz"
+        
+        if curl -LO "https://github.com/BurntSushi/ripgrep/releases/download/${rg_version}/${rg_archive}" 2>/dev/null; then
+                tar xzf "${rg_archive}" && \
+                cp "ripgrep-${rg_version}-x86_64-unknown-linux-musl/rg" /usr/local/bin/ && \
+                chmod +x /usr/local/bin/rg && \
+                success "ripgrep installed from pre-built binary" && \
+                return 0
+        fi
+        
+        # Method 2: Build from source
+        warning "Pre-built binary download failed, building from source..."
+        git clone https://github.com/BurntSushi/ripgrep.git || { warning "clone failed"; return 1; }
+        cd ripgrep || { warning "cd ripgrep failed"; return 1; }
+        
+        # Build with release optimizations
+        cargo build --release || { warning "cargo build failed"; return 1; }
+        
+        # Install the binary
+        cp target/release/rg /usr/local/bin/ || { warning "Failed to copy rg binary"; return 1; }
+        chmod +x /usr/local/bin/rg
+        
+        # Install man page if possible
+        if [[ -f target/release/build/ripgrep-*/out/rg.1 ]]; then
+                mkdir -p /usr/local/share/man/man1
+                cp target/release/build/ripgrep-*/out/rg.1 /usr/local/share/man/man1/ 2>/dev/null || true
+        fi
+        
+        success "ripgrep built and installed successfully"
+        return 0
+}
+
 build_zsh_from_source() {
         cmd_exists zsh && { info "Zsh already installed."; return 0; }
         info "Building Zsh from source..."
-        apt-get install -y build-essential ncurses-dev libncursesw5-dev yodl || error "Failed to install Zsh build deps."
+        apt-get install -y build-essential ncurses-dev libncursesw5-dev yodl || { warning "Failed to install Zsh build deps, skipping zsh build."; return 1; }
         local build_dir
-        build_dir=$(mktemp -d) || error "Failed to create temporary directory."
+        build_dir=$(mktemp -d) || { warning "Failed to create temporary directory for zsh build."; return 1; }
         trap 'rm -rf "$build_dir"' EXIT
-        cd "$build_dir" || error "cd failed"
-        git clone https://github.com/zsh-users/zsh.git || error "clone failed"
-        cd zsh || error "cd zsh failed"
-        ./Util/preconfig || error "preconfig failed"
+        cd "$build_dir" || { warning "cd failed"; return 1; }
+        git clone https://github.com/zsh-users/zsh.git || { warning "clone failed"; return 1; }
+        cd zsh || { warning "cd zsh failed"; return 1; }
+        ./Util/preconfig || { warning "preconfig failed"; return 1; }
         ./configure --prefix=/usr \
                 --bindir=/bin \
                 --sysconfdir=/etc/zsh \
@@ -148,11 +247,11 @@ build_zsh_from_source() {
                 --enable-function-subdirs \
                 --enable-site-fndir=/usr/local/share/zsh/site-functions \
                 --enable-fndir=/usr/share/zsh/functions \
-                --with-tcsetpgrp || error "configure failed"
-        make -j "$(nproc)" || error "make failed"
+                --with-tcsetpgrp || { warning "configure failed"; return 1; }
+        make -j "$(nproc)" || { warning "make failed"; return 1; }
         make check || warning "some tests failed"
-        make install || error "install failed"
-        rg -F -x -q "/bin/zsh" /etc/shells || echo "/bin/zsh" | tee -a /etc/shells >/dev/null || error "add to /etc/shells failed"
+        make install || { warning "install failed"; return 1; }
+        rg -F -x -q "/bin/zsh" /etc/shells || echo "/bin/zsh" | tee -a /etc/shells >/dev/null || warning "add to /etc/shells failed"
         if [[ -n "$SUDO_USER" ]]; then
                 chsh -s /bin/zsh "$SUDO_USER" || warning "chsh failed for $SUDO_USER"
         else
@@ -177,15 +276,7 @@ install_zsh_extras() {
         act_omz="$_"
         [[ "$act_omz" == INSTALL ]] && su - "$user" -c "git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git ~/.oh-my-zsh" && success "Installed oh-my-zsh for $user" || info "oh-my-zsh already installed"
 
-        # Download custom .zshrc or use oh-my-zsh template as fallback
-        if [[ ! -f "$user_home/.zshrc" ]]; then
-                info "Downloading custom .zshrc..."
-                curl -fsSL "https://raw.githubusercontent.com/LinuxUser255/ShellScripting/refs/heads/main/dotfiles/.zshrc" -o "$user_home/.zshrc" || {
-                        warning "Failed to download custom .zshrc, using oh-my-zsh template"
-                        su - "$user" -c "cp ~/.oh-my-zsh/templates/zshrc.zsh-template ~/.zshrc" || warning "create .zshrc failed"
-                }
-                chown "$user:$(id -gn "$user")" "$user_home/.zshrc" 2>/dev/null || true
-        fi
+        [[ -f "$user_home/.zshrc" ]] || su - "$user" -c "cp ~/.oh-my-zsh/templates/zshrc.zsh-template ~/.zshrc" || warning "create .zshrc failed"
 
         local -a pids=()
         local act_syn
@@ -223,24 +314,24 @@ build_alacritty() {
         cmd_exists cargo || curl https://sh.rustup.rs -sSf | sh -s -- -y
         export PATH="$HOME/.cargo/bin:$PATH"
         local build_dir
-        build_dir=$(mktemp -d) || error "Failed to create temporary directory"
+        build_dir=$(mktemp -d) || { warning "Failed to create temporary directory for Alacritty"; return 1; }
         trap 'rm -rf "$build_dir"' EXIT
-        cd "$build_dir" || error "cd failed"
-        git clone https://github.com/alacritty/alacritty.git || error "clone failed"
-        cd alacritty || error "cd alacritty failed"
-        git fetch --tags || error "fetch tags failed"
+        cd "$build_dir" || { warning "cd failed"; return 1; }
+        git clone https://github.com/alacritty/alacritty.git || { warning "clone failed"; return 1; }
+        cd alacritty || { warning "cd alacritty failed"; return 1; }
+        git fetch --tags || warning "fetch tags failed"
         local latest_tag
         latest_tag=$(git tag -l 'v*' | sort -V | tail -n1 || true)
         [ -n "$latest_tag" ] && git checkout "$latest_tag" || info "No version tag found; building default branch"
-        cargo build --release || error "cargo build failed"
-        cp target/release/alacritty /usr/local/bin/ || error "copy binary failed"
+        cargo build --release || { warning "cargo build failed"; return 1; }
+        cp target/release/alacritty /usr/local/bin/ || { warning "copy binary failed"; return 1; }
         install_desktop_files "$PWD"
         local user="${SUDO_USER:-$USER}"
         local user_home
         user_home=$(getent passwd "$user" | cut -d: -f6)
         local config_dir="$user_home/.config/alacritty"
-        mkdir -p "$config_dir" || error "mkdir config failed"
-        curl -L "https://raw.githubusercontent.com/LinuxUser255/alacritty/master/alacritty_config/alacritty.toml" -o "$config_dir/alacritty.toml" || error "download config failed"
+        mkdir -p "$config_dir" || warning "mkdir config failed"
+        curl -L "https://raw.githubusercontent.com/LinuxUser255/alacritty/master/alacritty_config/alacritty.toml" -o "$config_dir/alacritty.toml" || warning "download config failed"
         chown -R "$user:$(id -gn "$user")" "$config_dir"
         success "Alacritty built and installed"
 }
@@ -266,26 +357,26 @@ install_desktop_files() {
 build_neovim() {
         info "Building Neovim from source..."
         cmd_exists nvim && { info "Neovim is already installed."; return 0; }
-        apt-get install -y ninja-build gettext cmake curl build-essential || error "nvim deps failed"
+        apt-get install -y ninja-build gettext cmake curl build-essential || { warning "nvim deps failed"; return 1; }
         local build_dir
-        build_dir=$(mktemp -d) || error "mktemp failed"
+        build_dir=$(mktemp -d) || { warning "mktemp failed"; return 1; }
         trap 'rm -rf "$build_dir"' EXIT
-        cd "$build_dir" || error "cd failed"
-        git clone https://github.com/neovim/neovim.git || error "clone failed"
-        cd neovim || error "cd failed"
-        git checkout stable || error "checkout failed"
-        make -j"$(nproc)" CMAKE_BUILD_TYPE=RelWithDebInfo || error "make failed"
-        make install || error "install failed"
+        cd "$build_dir" || { warning "cd failed"; return 1; }
+        git clone https://github.com/neovim/neovim.git || { warning "clone failed"; return 1; }
+        cd neovim || { warning "cd failed"; return 1; }
+        git checkout stable || { warning "checkout failed"; return 1; }
+        make -j"$(nproc)" CMAKE_BUILD_TYPE=RelWithDebInfo || { warning "make failed"; return 1; }
+        make install || { warning "install failed"; return 1; }
         info "Neovim built and installed successfully."
 }
 
 install_brave() {
         info "Installing Brave browser..."
         cmd_exists brave-browser && { info "Brave is already installed."; return 0; }
-        apt-get install -y apt-transport-https curl gnupg gnupg2 || error "deps failed"
-        curl -fsSL https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg | gpg --dearmor | tee /usr/share/keyrings/brave-browser-archive-keyring.gpg >/dev/null || error "key import failed"
-        echo "deb [signed-by=/usr/share/keyrings/brave-browser-archive-keyring.gpg] https://brave-browser-apt-release.s3.brave.com/ stable main" | tee /etc/apt/sources.list.d/brave-browser-release.list >/dev/null || error "apt source failed"
-        apt-get update && apt-get install -y brave-browser || error "install failed"
+        apt-get install -y apt-transport-https curl gnupg gnupg2 || { warning "deps failed"; return 1; }
+        curl -fsSL https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg | gpg --dearmor | tee /usr/share/keyrings/brave-browser-archive-keyring.gpg >/dev/null || { warning "key import failed"; return 1; }
+        echo "deb [signed-by=/usr/share/keyrings/brave-browser-archive-keyring.gpg] https://brave-browser-apt-release.s3.brave.com/ stable main" | tee /etc/apt/sources.list.d/brave-browser-release.list >/dev/null || { warning "apt source failed"; return 1; }
+        apt-get update && apt-get install -y brave-browser || { warning "install failed"; return 1; }
         success "Brave browser installed successfully."
 }
 
@@ -293,15 +384,15 @@ fastfetch_build(){
         info "Building fastfetch from source..."
         cmd_exists fastfetch && { info "fastfetch is already installed."; return 0; }
         local build_dir
-        build_dir=$(mktemp -d) || error "mktemp failed"
+        build_dir=$(mktemp -d) || { warning "mktemp failed"; return 1; }
         trap 'rm -rf "$build_dir"' EXIT
-        cd "$build_dir" || error "cd failed"
-        git clone --depth=1 https://github.com/fastfetch-cli/fastfetch.git || error "clone failed"
-        cd fastfetch || error "cd failed"
-        mkdir -p build && cd build || error "build dir failed"
-        cmake .. || error "cmake configure failed"
-        cmake --build . -j"$(nproc)" || error "cmake build failed"
-        cmake --install . || error "cmake install failed"
+        cd "$build_dir" || { warning "cd failed"; return 1; }
+        git clone --depth=1 https://github.com/fastfetch-cli/fastfetch.git || { warning "clone failed"; return 1; }
+        cd fastfetch || { warning "cd failed"; return 1; }
+        mkdir -p build && cd build || { warning "build dir failed"; return 1; }
+        cmake .. || { warning "cmake configure failed"; return 1; }
+        cmake --build . -j"$(nproc)" || { warning "cmake build failed"; return 1; }
+        cmake --install . || { warning "cmake install failed"; return 1; }
         success "fastfetch built and installed successfully."
 }
 
@@ -313,23 +404,94 @@ lazy_scripts(){
         curl -fsSL -o /usr/local/bin/pwsearch.sh https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/pwsearch.sh & pids+=($!)
         curl -fsSL -o /usr/local/bin/faster.sh https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/faster.sh & pids+=($!)
         curl -fsSL -o /usr/local/bin/gclone.sh https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/gclone.sh & pids+=($!)
+        # curl down my .zshrc
         ((${#pids[@]})) && wait "${pids[@]}"
         chmod +x /usr/local/bin/fff /usr/local/bin/fast_grep.sh /usr/local/bin/pwsearch.sh /usr/local/bin/faster.sh /usr/local/bin/gclone.sh
         chown -R "${SUDO_USER:-$USER}:$(id -gn "${SUDO_USER:-$USER}")" /usr/local/bin/fff /usr/local/bin/fast_grep.sh /usr/local/bin/pwsearch.sh /usr/local/bin/faster.sh /usr/local/bin/gclone.sh || true
 }
 
+# Track installation results
+declare -a SUCCESSES=()
+declare -a FAILURES=()
+
+track_result() {
+        local task="$1"
+        local result="$2"
+        if [[ $result -eq 0 ]]; then
+                SUCCESSES+=("$task")
+        else
+                FAILURES+=("$task")
+        fi
+}
+
+print_summary() {
+        echo ""
+        print_msg "$BLUE" "========== INSTALLATION SUMMARY =========="
+        
+        if ((${#SUCCESSES[@]} > 0)); then
+                print_msg "$GREEN" "✓ Successfully completed:"
+                for task in "${SUCCESSES[@]}"; do
+                        echo "  - $task"
+                done
+        fi
+        
+        if ((${#FAILURES[@]} > 0)); then
+                echo ""
+                print_msg "$YELLOW" "⚠ Failed or skipped:"
+                for task in "${FAILURES[@]}"; do
+                        echo "  - $task"
+                done
+        fi
+        
+        echo ""
+        if ((${#FAILURES[@]} == 0)); then
+                print_msg "$GREEN" "All tasks completed successfully!"
+        else
+                print_msg "$YELLOW" "Script completed with some warnings. Please review the failed items above."
+        fi
+        echo ""
+}
+
 main() {
         check_root
+        
         update_system
+        track_result "System update" $?
+        
         install_packages
+        track_result "Package installation" $?
+        
+        # Build ripgrep if it's not available
+        if ! cmd_exists rg && ! cmd_exists ripgrep; then
+                build_ripgrep
+                track_result "ripgrep build" $?
+        fi
+        
         check_shell
+        track_result "Shell check" $?
+        
         build_zsh_from_source
+        track_result "Zsh build" $?
+        
         install_zsh_extras
+        track_result "Zsh extras" $?
+        
         build_alacritty
+        track_result "Alacritty build" $?
+        
         build_neovim
+        track_result "Neovim build" $?
+        
         install_brave
+        track_result "Brave browser" $?
+        
         fastfetch_build
+        track_result "Fastfetch build" $?
+        
         lazy_scripts
+        track_result "Lazy scripts" $?
+        
+        print_summary
 }
 
 main
