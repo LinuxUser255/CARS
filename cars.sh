@@ -177,7 +177,15 @@ install_zsh_extras() {
         act_omz="$_"
         [[ "$act_omz" == INSTALL ]] && su - "$user" -c "git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git ~/.oh-my-zsh" && success "Installed oh-my-zsh for $user" || info "oh-my-zsh already installed"
 
-        [[ -f "$user_home/.zshrc" ]] || su - "$user" -c "cp ~/.oh-my-zsh/templates/zshrc.zsh-template ~/.zshrc" || warning "create .zshrc failed"
+        # Download custom .zshrc or use oh-my-zsh template as fallback
+        if [[ ! -f "$user_home/.zshrc" ]]; then
+                info "Downloading custom .zshrc..."
+                curl -fsSL "https://raw.githubusercontent.com/LinuxUser255/ShellScripting/refs/heads/main/dotfiles/.zshrc" -o "$user_home/.zshrc" || {
+                        warning "Failed to download custom .zshrc, using oh-my-zsh template"
+                        su - "$user" -c "cp ~/.oh-my-zsh/templates/zshrc.zsh-template ~/.zshrc" || warning "create .zshrc failed"
+                }
+                chown "$user:$(id -gn "$user")" "$user_home/.zshrc" 2>/dev/null || true
+        fi
 
         local -a pids=()
         local act_syn
