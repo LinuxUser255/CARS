@@ -7,6 +7,59 @@
 # Better error handling - allow undefined variables but catch other errors
 #set -eo pipefail  # Exit on error and pipe failures, but allow undefined vars
 
+# Check if running in Docker container
+check_docker_environment() {
+    local in_docker=false
+    
+    # Multiple checks to detect if we're in a container
+    if [[ -f /.dockerenv ]]; then
+        in_docker=true
+    elif [[ -f /run/.containerenv ]]; then
+        in_docker=true
+    elif grep -q 'docker\|lxc\|containerd' /proc/1/cgroup 2>/dev/null; then
+        in_docker=true
+    fi
+    
+    if [[ "$in_docker" == "true" ]]; then
+        echo "╔════════════════════════════════════════════════════════════╗"
+        echo "║                                                            ║"
+        echo "║        🐳 RUNNING IN DOCKER CONTAINER - SAFE MODE 🐳       ║"
+        echo "║                                                            ║"
+        echo "║  This script is executing inside a Docker container.      ║"
+        echo "║  All changes will be isolated from your host system.      ║"
+        echo "║                                                            ║"
+        echo "╚════════════════════════════════════════════════════════════╝"
+        echo ""
+        return 0
+    else
+        echo "╔════════════════════════════════════════════════════════════╗"
+        echo "║                                                            ║"
+        echo "║        ⚠️  WARNING: RUNNING ON HOST SYSTEM! ⚠️              ║"
+        echo "║                                                            ║"
+        echo "║  This script is designed to run in a Docker container.    ║"
+        echo "║  Running it on your host system will modify your OS!      ║"
+        echo "║                                                            ║"
+        echo "║  To run safely in Docker:                                 ║"
+        echo "║    make test-quick   (for quick tests)                    ║"
+        echo "║    make run-script   (for full script)                    ║"
+        echo "║                                                            ║"
+        echo "╚════════════════════════════════════════════════════════════╝"
+        echo ""
+        
+        # Check if FORCE_HOST_RUN is set (for advanced users)
+        if [[ "${FORCE_HOST_RUN:-0}" != "1" ]]; then
+            read -r -p "Do you REALLY want to run this on your HOST SYSTEM? (type 'yes' to continue): " response
+            if [[ "$response" != "yes" ]]; then
+                echo "Aborting. Please use Docker for safe testing."
+                exit 1
+            fi
+            echo "⚠️  Proceeding with HOST SYSTEM execution at your own risk! ⚠️"
+            echo ""
+        fi
+        return 1
+    fi
+}
+
 # Add a debug function
 debug() {
     if [[ "${DEBUG:-0}" == "1" ]]; then
@@ -478,7 +531,7 @@ build_alacritty() {
 
         # Clone Alacritty repository as the user
         info "Cloning Alacritty repository..."
-        su - "$user" -c "cd '$build_dir' && git clone https://github.com/alacritty/alacritty.git" ||
+        su - "$user" -c "cd '$build_dir' && git clone --depth=1 https://github.com/alacritty/alacritty.git" ||
                 error "Failed to clone Alacritty repository."
 
         # Build Alacritty as the user with proper environment
@@ -601,7 +654,7 @@ build_neovim() {
                 error "Failed to build Neovim."
 
         # Install Neovim
-        sudo make install ||
+        make install ||
                 error "Failed to install Neovim."
 
         info "Neovim built and installed successfully."
@@ -649,7 +702,7 @@ lazy_scripts(){
         chmod +x fff
         sudo mv fff -t /usr/local/bin/
 
-        curl -L https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fast_grep.sh
+        curl -LO https://raw.githubusercontent.com/LinuxUser255/BashAndLinux/refs/heads/main/ShortCuts/fast_grep.sh
         chmod +x fast_grep.sh
         sudo mv fast_grep.sh -t /usr/local/bin/
 
@@ -680,7 +733,7 @@ install_golang() {
         fi
 
         # Download and install Go
-        curl -fsSL https://golang.org/dl/go1.18.linux-amd64.tar.gz \
+        curl -fsSL https://go.dev/dl/go1.23.2.linux-amd64.tar.gz \
              | tar -C /usr/local -xzf - ||
                 error "Failed to download and install Go."
 
@@ -799,6 +852,9 @@ my_dot_files(){
 
 
 main() {
+    # First check if we're in Docker or on host
+    check_docker_environment
+    
     progress "Starting CARS installation script..."
 
     progress "Checking root privileges..."

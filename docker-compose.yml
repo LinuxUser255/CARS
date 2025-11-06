@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  cars-test:
+    build: .
+    container_name: cars-test-container
+    stdin_open: true
+    tty: true
+    volumes:
+      # Mount the script for live editing
+      - ./cars.sh:/home/testuser/cars.sh:ro
+      # Mount a test directory for output
+      - ./test-output:/home/testuser/output
+    environment:
+      - DEBUG=1  # Enable debug mode in the script
+    networks:
+      - cars-test-net
+
+networks:
+  cars-test-net:
+    driver: bridge
