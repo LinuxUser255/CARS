@@ -5,13 +5,13 @@
 # This rice script is for Debian - based distros.
 
 # Better error handling - allow undefined variables but catch other errors
-#set -eo pipefail  # Exit on error and pipe failures, but allow undefined vars
+# set -eo pipefail  # Exit on error and pipe failures, but allow undefined vars
 
 # Check if running in Docker container
 check_docker_environment() {
     local in_docker=false
-    
-    # Multiple checks to detect if we're in a container
+
+    # Multiple checks to detect if you're in a container
     if [[ -f /.dockerenv ]]; then
         in_docker=true
     elif [[ -f /run/.containerenv ]]; then
@@ -19,14 +19,14 @@ check_docker_environment() {
     elif grep -q 'docker\|lxc\|containerd' /proc/1/cgroup 2>/dev/null; then
         in_docker=true
     fi
-    
+
     if [[ "$in_docker" == "true" ]]; then
         echo "╔════════════════════════════════════════════════════════════╗"
         echo "║                                                            ║"
-        echo "║        🐳 RUNNING IN DOCKER CONTAINER - SAFE MODE 🐳       ║"
+        echo "║         RUNNING IN DOCKER CONTAINER - SAFE MODE            ║"
         echo "║                                                            ║"
-        echo "║  This script is executing inside a Docker container.      ║"
-        echo "║  All changes will be isolated from your host system.      ║"
+        echo "║  This script is executing inside a Docker container.       ║"
+        echo "║  All changes will be isolated from your host system.       ║"
         echo "║                                                            ║"
         echo "╚════════════════════════════════════════════════════════════╝"
         echo ""
@@ -34,18 +34,18 @@ check_docker_environment() {
     else
         echo "╔════════════════════════════════════════════════════════════╗"
         echo "║                                                            ║"
-        echo "║        ⚠️  WARNING: RUNNING ON HOST SYSTEM! ⚠️              ║"
+        echo "║          WARNING: RUNNING ON HOST SYSTEM!                  ║"
         echo "║                                                            ║"
-        echo "║  This script is designed to run in a Docker container.    ║"
-        echo "║  Running it on your host system will modify your OS!      ║"
+        echo "║  This script is designed to run in a Docker container.     ║"
+        echo "║  Running it on your host system will modify your OS!       ║"
         echo "║                                                            ║"
-        echo "║  To run safely in Docker:                                 ║"
-        echo "║    make test-quick   (for quick tests)                    ║"
-        echo "║    make run-script   (for full script)                    ║"
+        echo "║  To run safely in Docker:                                  ║"
+        echo "║    make test-quick   (for quick tests)                     ║"
+        echo "║    make run-script   (for full script)                     ║"
         echo "║                                                            ║"
         echo "╚════════════════════════════════════════════════════════════╝"
         echo ""
-        
+
         # Check if FORCE_HOST_RUN is set (for advanced users)
         if [[ "${FORCE_HOST_RUN:-0}" != "1" ]]; then
             read -r -p "Do you REALLY want to run this on your HOST SYSTEM? (type 'yes' to continue): " response
@@ -60,14 +60,12 @@ check_docker_environment() {
     fi
 }
 
-# Add a debug function
 debug() {
     if [[ "${DEBUG:-0}" == "1" ]]; then
         echo "DEBUG: $*" >&2
     fi
 }
 
-# Add progress tracking
 progress() {
     echo "PROGRESS: $*"
 }
@@ -86,7 +84,6 @@ warning_error() {
     return 1
 }
 
-# Text formatting
 readonly BOLD="\e[1m"
 readonly RESET="\e[0m"
 readonly RED="\e[31m"
@@ -94,24 +91,20 @@ readonly GREEN="\e[32m"
 readonly YELLOW="\e[33m"
 readonly BLUE="\e[34m"
 
-# Function to print colored output
 print_msg() {
         local color="$1"
         local msg="$2"
         printf "${color}${BOLD}%s${RESET}\n" "$msg"
 }
 
-# Function to print Success messages
 success(){
         print_msg "$GREEN" "Success: $1" >&2
 }
 
-# Function to print informational messages
 info(){
         print_msg "$BLUE" "Info: $1"
 }
 
-# Function to print warning messages
 warning(){
        print_msg "$YELLOW" "Warning: $1"
 }
@@ -128,7 +121,6 @@ update_system() {
         apt-get update && apt-get upgrade -y  # Fixed: was "apt get-upgrade"
 }
 
-# Function to check if a package is installed
 is_installed() {
     dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed"
 }
@@ -137,7 +129,6 @@ cmd_exists() {
         command -v "$1" >/dev/null 2>&1
 }
 
-# Packaes arrary
 pkgs=(
     vim
     git
@@ -156,11 +147,11 @@ pkgs=(
     ninja-build
     gettext
     unzip
-    x11-xserver-utils    # Fixed: was "x11-server-utils"
+    x11-xserver-utils     # Fixed: was "x11-server-utils"
     i3
     # setxkbmap - This is part of x11-xkb-utils
-   # x11-xkb-utils       # Contains setxkbmap
-    xdotool             # Fixed: was "xdtool"
+    # x11-xkb-utils       # Contains setxkbmap
+    xdotool               # Fixed: was "xdtool"
     ffmpeg
     pass
     gpg
@@ -171,7 +162,6 @@ pkgs=(
 )
 
 
-# Function to install packages
 install_packages() {
     info "Installing packages..."
     local total=${#pkgs[@]}
@@ -203,7 +193,6 @@ install_packages() {
     fi
 }
 
-# Install Brave browser
 install_brave() {
         info "Installing Brave browser..."
 
@@ -212,28 +201,23 @@ install_brave() {
             return
         fi
 
-        # Install Brave dependencies
         apt install -y apt-transport-https curl gnupg gnupg2 ||
             error "Failed to install Brave dependencies."
 
-        # Import Brave's GPG key
         curl -fsSL https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg | gpg --dearmor |
             tee /usr/share/keyrings/brave-browser-archive-keyring.gpg >/dev/null ||
             error "Failed to import Brave's GPG key."
 
-        # Add Brave repository to APT sources
         echo "deb [signed-by=/usr/share/keyrings/brave-browser-archive-keyring.gpg] https://brave-browser-apt-release.s3.brave.com/ stable main" |
             tee /etc/apt/sources.list.d/brave-browser-release.list ||
             error "Failed to add Brave repository to APT sources."
 
-        # Update APT sources and install Brave
         { apt update && apt install -y brave-browser; } ||
             error "Failed to update APT sources or install Brave browser."
 
         success "Brave browser installed successfully."
 }
 
-# Check for zsh and if not, ask user if they want to build and install it
 check_shell() {
     local current_shell
     local zsh_available=false
@@ -318,7 +302,6 @@ check_shell() {
     fi
 }
 
-# Build and install Zsh from source with error handling
 build_zsh_from_source() {
         # zsh_version=5.9
         info "Building Zsh from source..."
@@ -386,7 +369,7 @@ build_zsh_from_source() {
         return 0
 }
 
-# Function to install oh-my-zsh and plugins
+# Installing oh-my-zsh and zsh plugins
 install_zsh_extras() {
         local user
         user="${SUDO_USER:-$USER}"
@@ -487,7 +470,6 @@ EOF
         info "Zsh extras installation completed successfully"
 }
 
-# Install Rust and build Alacritty from source
 build_alacritty() {
         info "Building Alacritty from source..."
 
@@ -539,15 +521,12 @@ build_alacritty() {
         su - "$user" -c "cd '$build_dir/alacritty' && source '$user_home/.cargo/env' && PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 cargo build --release" ||
                 error "Failed to build Alacritty."
 
-        # Copy the alacritty binary to PATH (as root)
         cp "$build_dir/alacritty/target/release/alacritty" /usr/local/bin/ ||
                 error "Failed to copy alacritty binary to /usr/local/bin."
 
-        # Make it executable
         chmod +x /usr/local/bin/alacritty ||
                 error "Failed to make alacritty executable."
 
-        # Create desktop entry and install terminfo
         install_desktop_files "$build_dir"
 
         # Create config directory for the user
@@ -564,7 +543,6 @@ build_alacritty() {
         success "Alacritty built and installed successfully."
 }
 
-# Install desktop files and terminfo for Alacritty
 install_desktop_files() {
         local build_dir="$1"
 
@@ -590,7 +568,6 @@ install_desktop_files() {
         update-desktop-database ||
                 warning "Failed to update desktop database."
 
-        # Install manual page
         mkdir -p /usr/local/share/man/man1
         gzip -c extra/alacritty.man > /usr/local/share/man/man1/alacritty.1.gz ||
                 warning "Failed to install manual page."
@@ -611,11 +588,9 @@ install_desktop_files() {
                 warning "Failed to install Zsh completion."
 }
 
-# Build Neovim from source
 build_neovim() {
         info "Building Neovim from source..."
 
-        # Check if Neovim is already installed
         if cmd_exists nvim; then
             info "Neovim is already installed."
             return
@@ -634,33 +609,27 @@ build_neovim() {
         # Ensure clean up after build
         trap 'rm -rf "$build_dir"' EXIT
 
-        # Clone Neovim repository
         cd "$build_dir" ||
                 error "Failed to change directory to $build_dir."
 
         git clone https://github.com/neovim/neovim.git ||
                 error "Failed to clone Neovim repository."
 
-        # Navigate to the cloned Neovim repository
         cd neovim ||
                 error "Failed to change directory to neovim."
 
-        # Checkout the stable branch
         git checkout stable ||
                 error "Failed to checkout stable branch."
 
-        # Build Neovim
         make CMAKE_BUILD_TYPE=RelWithDebInfo ||
                 error "Failed to build Neovim."
 
-        # Install Neovim
         make install ||
                 error "Failed to install Neovim."
 
         info "Neovim built and installed successfully."
 }
 
-# My Neovim configuration
 install_neovim_config() {
         local user="${SUDO_USER:-$USER}"
         local user_home
@@ -692,7 +661,6 @@ install_neovim_config() {
         info "Configuration installed to: $user_home/.config/nvim"
 }
 
-# My lazy scripts
 lazy_scripts(){
         # place all the downloaded scripts in /usr/local/bin
         # print message in bold blue that says "Curling lasy scripts..."
@@ -722,7 +690,6 @@ lazy_scripts(){
       #  sudo chown -R "$USER":"$USER" /usr/local/bin/fff /usr/local/bin/fast_grep.sh /usr/local/bin/pwsearch.sh /usr/local/bin/faster.sh /usr/local/bin/gclone.sh
 }
 
-# install Golang
 install_golang() {
         info "Installing Golang..."
 
@@ -732,7 +699,6 @@ install_golang() {
             return
         fi
 
-        # Download and install Go
         curl -fsSL https://go.dev/dl/go1.23.2.linux-amd64.tar.gz \
              | tar -C /usr/local -xzf - ||
                 error "Failed to download and install Go."
@@ -779,7 +745,6 @@ install_nodejs() {
         success "Node.js installed successfully for $user"
 }
 
-# Install Rust and Cargo compiler
 install_rustup_and_compiler() {
         info "Installing Rust and Cargo..."
 
@@ -852,9 +817,9 @@ my_dot_files(){
 
 
 main() {
-    # First check if we're in Docker or on host
+    # First check if in Docker or on host
     check_docker_environment
-    
+
     progress "Starting CARS installation script..."
 
     progress "Checking root privileges..."
@@ -919,5 +884,4 @@ main() {
     fi
 }
 
-# Call main function
 main "$@"
