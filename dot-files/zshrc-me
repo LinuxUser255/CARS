@@ -303,12 +303,7 @@ alias yt='yt4k '
 alias yta='yt4k -a --audio-format wav '
 
 # -- Docs / notes --
-alias todo='cd ~/Documents/ToDos'
 alias bsuite='cat ~/Documents/BSuitestuff/bsuite.txt'
-alias gpt='nvim ~/Documents/random/gptchat/questions.txt'
-alias emails='nvim ~/Documents/random/email-compose.txt'
-alias bsides='cd ~/Documents/BsidesTriad'
-alias phonk='cd ~/Music/Genres/PHONK'
 
 # -- Tools --
 alias cleanurl='url-sanitizer'
