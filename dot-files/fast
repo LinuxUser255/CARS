@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+
+xset r rate 360 70
+
+
+
