@@ -1,0 +1,558 @@
+# ~/.zshrc file for zsh interactive shells.
+
+setopt autocd              # change directory just by typing its name
+#setopt correct            # auto correct mistakes
+setopt interactivecomments # allow comments in interactive mode
+setopt magicequalsubst     # enable filename expansion for arguments of the form ‘anything=expression’
+setopt nonomatch           # hide error message if there is no match for the pattern
+setopt notify              # report the status of background jobs immediately
+setopt numericglobsort     # sort filenames numerically when it makes sense
+setopt promptsubst         # enable command substitution in prompt
+
+WORDCHARS=${WORDCHARS//\/} # Don't consider certain characters part of the word
+
+# hide EOL sign ('%')
+PROMPT_EOL_MARK=""
+
+# --- Environment Variables ---
+export EDITOR=nvim
+export VISUAL=nvim
+export PAGER=less
+
+
+# configure key keybindings
+bindkey -e                                        # emacs key bindings
+bindkey ' ' magic-space                           # do history expansion on space
+bindkey '^U' backward-kill-line                   # ctrl + U
+bindkey '^[[3;5~' kill-word                       # ctrl + Supr
+bindkey '^[[3~' delete-char                       # delete
+bindkey '^[[1;5C' forward-word                    # ctrl + ->
+bindkey '^[[1;5D' backward-word                   # ctrl + <-
+bindkey '^[[5~' beginning-of-buffer-or-history    # page up
+bindkey '^[[6~' end-of-buffer-or-history          # page down
+bindkey '^[[H' beginning-of-line                  # home
+bindkey '^[[F' end-of-line                        # end
+bindkey '^[[Z' undo                               # shift + tab undo last action
+
+# enable completion features
+autoload -Uz compinit
+compinit -d ~/.cache/zcompdump
+zstyle ':completion:*:*:*:*:*' menu select
+zstyle ':completion:*' auto-description 'specify: %d'
+zstyle ':completion:*' completer _expand _complete
+zstyle ':completion:*' format 'Completing %d'
+zstyle ':completion:*' group-name ''
+zstyle ':completion:*' list-colors ''
+zstyle ':completion:*' list-prompt %SAt %p: Hit TAB for more, or the character to insert%s
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+zstyle ':completion:*' rehash true
+zstyle ':completion:*' select-prompt %SScrolling active: current selection at %p%s
+zstyle ':completion:*' use-compctl false
+zstyle ':completion:*' verbose true
+zstyle ':completion:*:kill:*' command 'ps -u $USER -o pid,%cpu,tty,cputime,cmd'
+
+# History configurations
+HISTFILE=~/.zsh_history
+HISTSIZE=5000
+SAVEHIST=2000
+setopt hist_expire_dups_first # delete duplicates first when HISTFILE size exceeds HISTSIZE
+setopt hist_ignore_dups       # ignore duplicated commands history list
+setopt hist_ignore_space      # ignore commands that start with space
+setopt hist_verify            # show command with history expansion to user before running it
+#setopt share_history         # share command history data
+
+# force zsh to show the complete history
+alias history="history 0"
+
+# configure `time` format
+TIMEFMT=$'\nreal\t%E\nuser\t%U\nsys\t%S\ncpu\t%P'
+
+# make less more friendly for non-text input files, see lesspipe(1)
+#[ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
+
+# set variable identifying the chroot you work in (used in the prompt below)
+if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
+    debian_chroot=$(cat /etc/debian_chroot)
+fi
+
+# set a fancy prompt (non-color, unless we know we "want" color)
+case "$TERM" in
+    xterm-color|*-256color) color_prompt=yes;;
+esac
+
+# uncomment for a colored prompt, if the terminal has the capability; turned
+# off by default to not distract the user: the focus in a terminal window
+# should be on the output of commands, not on the prompt
+force_color_prompt=yes
+
+if [ -n "$force_color_prompt" ]; then
+    if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
+        # We have color support; assume it's compliant with Ecma-48
+        # (ISO/IEC-6429). (Lack of such support is extremely rare, and such
+        # a case would tend to support setf rather than setaf.)
+        color_prompt=yes
+    else
+        color_prompt=
+    fi
+fi
+
+# === Kali-style Two-Line Prompt with Emoji Skull ===
+PROMPT='%F{blue}┌──%F{red}%n💀%m%f [%F{yellow}%D{%Y-%m-%d %H:%M:%S%Z}%f] - [%F{green}%~%f]
+%F{blue}└─%f%F{red}$%f '
+
+
+# The following block is surrounded by two delimiters.
+# These delimiters must not be modified. Thanks.
+# START KALI CONFIG VARIABLES
+PROMPT_ALTERNATIVE=twoline
+NEWLINE_BEFORE_PROMPT=yes
+# STOP KALI CONFIG VARIABLES
+
+if [ "$color_prompt" = yes ]; then
+    # override default virtualenv indicator in prompt
+    VIRTUAL_ENV_DISABLE_PROMPT=1
+
+    configure_prompt
+
+    # enable syntax-highlighting
+    if [ -f /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && [ "$color_prompt" = yes ]; then
+        . /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+        ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets pattern)
+        ZSH_HIGHLIGHT_STYLES[default]=none
+        ZSH_HIGHLIGHT_STYLES[unknown-token]=fg=red,bold
+        ZSH_HIGHLIGHT_STYLES[reserved-word]=fg=cyan,bold
+        ZSH_HIGHLIGHT_STYLES[suffix-alias]=fg=green,underline
+        ZSH_HIGHLIGHT_STYLES[global-alias]=fg=magenta
+        ZSH_HIGHLIGHT_STYLES[precommand]=fg=green,underline
+        ZSH_HIGHLIGHT_STYLES[commandseparator]=fg=blue,bold
+        ZSH_HIGHLIGHT_STYLES[autodirectory]=fg=green,underline
+        ZSH_HIGHLIGHT_STYLES[path]=underline
+        ZSH_HIGHLIGHT_STYLES[path_pathseparator]=
+        ZSH_HIGHLIGHT_STYLES[path_prefix_pathseparator]=
+        ZSH_HIGHLIGHT_STYLES[globbing]=fg=blue,bold
+        ZSH_HIGHLIGHT_STYLES[history-expansion]=fg=blue,bold
+        ZSH_HIGHLIGHT_STYLES[command-substitution]=none
+        ZSH_HIGHLIGHT_STYLES[command-substitution-delimiter]=fg=magenta
+        ZSH_HIGHLIGHT_STYLES[process-substitution]=none
+        ZSH_HIGHLIGHT_STYLES[process-substitution-delimiter]=fg=magenta
+        ZSH_HIGHLIGHT_STYLES[single-hyphen-option]=fg=magenta
+        ZSH_HIGHLIGHT_STYLES[double-hyphen-option]=fg=magenta
+        ZSH_HIGHLIGHT_STYLES[back-quoted-argument]=none
+        ZSH_HIGHLIGHT_STYLES[back-quoted-argument-delimiter]=fg=blue,bold
+        ZSH_HIGHLIGHT_STYLES[single-quoted-argument]=fg=yellow
+        ZSH_HIGHLIGHT_STYLES[double-quoted-argument]=fg=yellow
+        ZSH_HIGHLIGHT_STYLES[dollar-quoted-argument]=fg=yellow
+        ZSH_HIGHLIGHT_STYLES[rc-quote]=fg=magenta
+        ZSH_HIGHLIGHT_STYLES[dollar-double-quoted-argument]=fg=magenta
+        ZSH_HIGHLIGHT_STYLES[back-double-quoted-argument]=fg=magenta
+        ZSH_HIGHLIGHT_STYLES[back-dollar-quoted-argument]=fg=magenta
+        ZSH_HIGHLIGHT_STYLES[assign]=none
+        ZSH_HIGHLIGHT_STYLES[redirection]=fg=blue,bold
+        ZSH_HIGHLIGHT_STYLES[comment]=fg=black,bold
+        ZSH_HIGHLIGHT_STYLES[named-fd]=none
+        ZSH_HIGHLIGHT_STYLES[numeric-fd]=none
+        ZSH_HIGHLIGHT_STYLES[arg0]=fg=green
+        ZSH_HIGHLIGHT_STYLES[bracket-error]=fg=red,bold
+        ZSH_HIGHLIGHT_STYLES[bracket-level-1]=fg=blue,bold
+        ZSH_HIGHLIGHT_STYLES[bracket-level-2]=fg=green,bold
+        ZSH_HIGHLIGHT_STYLES[bracket-level-3]=fg=magenta,bold
+        ZSH_HIGHLIGHT_STYLES[bracket-level-4]=fg=yellow,bold
+        ZSH_HIGHLIGHT_STYLES[bracket-level-5]=fg=cyan,bold
+        ZSH_HIGHLIGHT_STYLES[cursor-matchingbracket]=standout
+    fi
+else
+    PROMPT='${debian_chroot:+($debian_chroot)}%n@%m:%~%# '
+fi
+unset color_prompt force_color_prompt
+
+toggle_oneline_prompt(){
+    if [ "$PROMPT_ALTERNATIVE" = oneline ]; then
+        PROMPT_ALTERNATIVE=twoline
+    else
+        PROMPT_ALTERNATIVE=oneline
+    fi
+    configure_prompt
+    zle reset-prompt
+}
+zle -N toggle_oneline_prompt
+bindkey ^P toggle_oneline_prompt
+
+# If this is an xterm set the title to user@host:dir
+case "$TERM" in
+xterm*|rxvt*|Eterm|aterm|kterm|gnome*|alacritty)
+    TERM_TITLE=$'\e]0;${debian_chroot:+($debian_chroot)}${VIRTUAL_ENV:+($(basename $VIRTUAL_ENV))}%n@%m: %~\a'
+    ;;
+*)
+    ;;
+esac
+
+precmd() {
+    # Print the previously configured title
+    print -Pnr -- "$TERM_TITLE"
+
+    # Print a new line before the prompt, but only if it is not the first line
+    if [ "$NEWLINE_BEFORE_PROMPT" = yes ]; then
+        if [ -z "$_NEW_LINE_BEFORE_PROMPT" ]; then
+            _NEW_LINE_BEFORE_PROMPT=1
+        else
+            print ""
+        fi
+    fi
+}
+
+# enable color support of ls, less and man, and also add handy aliases
+if [ -x /usr/bin/dircolors ]; then
+    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+    alias ls='ls --color=auto'
+    #alias dir='dir --color=auto'
+    #alias vdir='vdir --color=auto'
+
+    alias grep='grep --color=auto'
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
+    alias diff='diff --color=auto'
+    alias ip='ip --color=auto'
+    alias ff='fastfetch'
+
+    export LESS_TERMCAP_mb=$'\E[1;31m'     # begin blink
+    export LESS_TERMCAP_md=$'\E[1;36m'     # begin bold
+    export LESS_TERMCAP_me=$'\E[0m'        # reset bold/blink
+    export LESS_TERMCAP_so=$'\E[01;33m'    # begin reverse video
+    export LESS_TERMCAP_se=$'\E[0m'        # reset reverse video
+    export LESS_TERMCAP_us=$'\E[1;32m'     # begin underline
+    export LESS_TERMCAP_ue=$'\E[0m'        # reset underline
+
+    # Take advantage of $LS_COLORS for completion as well
+    zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+    zstyle ':completion:*:*:kill:*:processes' list-colors '=(#b) #([0-9]#)*=0=01;31'
+fi
+
+
+mkcd() {
+    if [[ -z "${1:-}" ]]; then
+        printf 'Usage: mkcd <directory>\n' >&2
+        return 1
+    fi
+    mkdir -p "$1" && cd "$1"
+}
+
+
+#---Personal aliases---#
+# listing directories
+alias l='ls'
+alias ll='ls -l'
+alias LL='ls -l'
+alias LLA='ls -la'
+alias lla='ls -la'
+alias lsdir='ls -l | awk "{print \$9}"'
+alias tm='tmux'
+
+# cmd & shortcut scripts
+alias v='nvim'
+alias n='nvim'
+alias nn='nvim .'
+alias e='exit'
+alias q='exit'
+alias c='cat'
+alias b='batcat'
+alias up='sudo apt update'
+alias upup='sudo apt update && sudo apt upgrade'
+alias upupyes='sudo apt update && sudo apt upgrade -y'
+alias inst='sudo apt install'
+alias ifconfig='sudo ifconfig'
+alias iwconfig='sudo iwconfig'
+alias shut='sudo shutdown -P now'
+alias png='ping 1.1.1.1'
+alias shutdown='sudo shutdown -P now'
+alias reboot='sudo reboot'
+
+# start SSH_CONNECTION
+alias sshstart='sudo systemctl start ssh'
+alias sshstatus='sudo systemctl status ssh'
+alias sshstop='sudo systemctl stop ssh'
+alias space='pr -d -t '
+alias ufw='sudo ufw'
+alias lsnum='ls -l -v'
+alias rr='ranger'
+
+#alias lf='lf-ueberzug'
+alias lsawk="echo ls -l pipe to awk print 9th field"
+alias nvconf='cd ~/.config/nvim'
+
+
+# More Custom scripts
+#-----------------------
+alias space='space'  # Double spaces lines of a text file.
+alias remap='remap'   # Remaps caps lock to the escape key.
+alias fast='xset r rate 380 80' # increase cursor speed
+
+# dot file access
+alias vb='vim .bashrc'
+alias vv="vim .vimrc"
+alias rc='nvim ~/.zshrc'
+alias vrc='vim ~/.zshrc'
+alias nn='nvim .'
+alias bb='bat ~/.zshrc'
+alias late='ls -lt | head -n 10' # displays the most recent file added or edited in a directory.
+alias ohmyzsh="cd ~/.oh-my-zsh"
+alias nvconfig="cd ~/.config/nvim"
+#alias zshconfig="mate ~/.zshrc"
+
+# change directory shortcuts & access specific directories
+alias cc='cd'
+alias CC='cd'
+alias down='cd ~/Downloads'
+alias doc='cd ~/Documents'
+alias pic='cd ~/Pictures'
+alias mus='cd ~/Music'
+alias vid='cd ~/Videos'
+alias opt='cd /opt'
+alias boxes='cd ~/Boxes'
+alias temp='cd ~/Templates'
+alias projects='cd ~/Projects'
+alias proj='cd ~/Projects'
+
+alias graud='cd /opt/graudit/;./graudit'
+# alias cmd=' '
+
+
+#===================================================================#
+#   oh-my-zsh style shortcuts — standalone, no oh-my-zsh required   #
+#===================================================================#
+
+# --- directory navigation -------------------------------------------
+# every cd is remembered; `d` lists the stack, `1`-`9` jump back
+setopt auto_pushd pushd_ignore_dups pushdminus
+alias -g ...='../..'
+alias -g ....='../../..'
+alias -g .....='../../../..'
+alias -- -='cd -'
+alias 1='cd -1' 2='cd -2' 3='cd -3' 4='cd -4' 5='cd -5' 6='cd -6' 7='cd -7' 8='cd -8' 9='cd -9'
+alias d='dirs -v | head -10'
+alias md='mkdir -p'
+alias rd='rmdir'
+
+# take: smarter mkcd
+# take new-dir                                  -> mkdir + cd
+# take https://github.com/user/repo.git         -> git clone + cd
+# take https://example.com/tool.tar.gz          -> download + extract + cd
+take() {
+    if [[ -z "${1:-}" ]]; then
+        printf 'Usage: take <dir | git-url | tarball-url>\n' >&2
+        return 1
+    fi
+    case "$1" in
+        http*://*.tar.gz|http*://*.tgz|http*://*.tar.xz|http*://*.tar.bz2|http*://*.tar)
+            _take_tarball "$1" ;;
+        git@*|ssh://*|*.git|https://github.com/*|https://gitlab.com/*)
+            _take_git "$1" ;;
+        *)
+            mkcd "$1" ;;
+    esac
+}
+_take_git() {
+    local dir=${${${1%/}:t}##*:}
+    dir=${dir%.git}
+    git clone "$1" "$dir" && cd "$dir"
+}
+_take_tarball() {
+    local tmp dir
+    tmp=$(mktemp) || return 1
+    if curl -fsSL "$1" -o "$tmp"; then
+        dir=$(tar -tf "$tmp" | head -n1 | cut -d/ -f1)
+        tar -xf "$tmp" && [[ -n $dir ]] && cd "$dir"
+    fi
+    rm -f "$tmp"
+}
+
+# --- extract any archive ---------------------------------------------
+# extract file.tar.gz     (or: x file.zip other.7z)
+extract() {
+    if (( $# == 0 )); then
+        printf 'Usage: extract <archive>...\n' >&2
+        return 1
+    fi
+    local f
+    for f in "$@"; do
+        [[ -f $f ]] || { printf "extract: '%s' is not a file\n" "$f" >&2; continue; }
+        case ${f:l} in
+            *.tar.gz|*.tgz)          tar xzf "$f" ;;
+            *.tar.bz2|*.tbz2)        tar xjf "$f" ;;
+            *.tar.xz|*.txz)          tar xJf "$f" ;;
+            *.tar.zst)               tar --zstd -xf "$f" ;;
+            *.tar)                   tar xf "$f" ;;
+            *.gz)                    gunzip -k "$f" ;;
+            *.bz2)                   bunzip2 -k "$f" ;;
+            *.xz)                    unxz -k "$f" ;;
+            *.zst)                   unzstd "$f" ;;
+            *.zip|*.jar|*.war|*.apk) unzip "$f" ;;
+            *.7z)                    7z x "$f" ;;
+            *.rar)                   unrar x "$f" ;;
+            *.deb)                   ar x "$f" ;;
+            *) printf 'extract: unknown archive type: %s\n' "$f" >&2 ;;
+        esac
+    done
+}
+alias x='extract'
+
+# --- clipboard: copypath / copyfile / copybuffer ----------------------
+# needs xclip (sudo apt install xclip)
+_clip() {
+    if [[ -n $WAYLAND_DISPLAY ]] && (( $+commands[wl-copy] )); then wl-copy
+    elif (( $+commands[xclip] )); then xclip -selection clipboard
+    elif (( $+commands[xsel] )); then xsel -ib
+    else printf 'no clipboard tool: sudo apt install xclip\n' >&2; return 1
+    fi
+}
+# copypath            -> copy current dir path
+# copypath file.txt   -> copy absolute path of file.txt
+copypath() {
+    local p=${${1:-$PWD}:a}
+    print -rn -- "$p" | _clip && printf 'copied: %s\n' "$p"
+}
+# copyfile notes.txt  -> copy file contents
+copyfile() {
+    if [[ ! -f "${1:-}" ]]; then
+        printf 'Usage: copyfile <file>\n' >&2
+        return 1
+    fi
+    _clip < "$1" && printf 'copied contents of %s\n' "$1"
+}
+# Ctrl+O -> copy the command currently typed on the line
+copybuffer() { print -rn -- "$BUFFER" | _clip; }
+zle -N copybuffer
+bindkey '^O' copybuffer
+
+# --- key-binding shortcuts --------------------------------------------
+# Up/Down: search history by what's already typed (type "nmap", press Up)
+autoload -Uz up-line-or-beginning-search down-line-or-beginning-search
+zle -N up-line-or-beginning-search
+zle -N down-line-or-beginning-search
+bindkey '^[[A' up-line-or-beginning-search
+bindkey '^[OA' up-line-or-beginning-search
+bindkey '^[[B' down-line-or-beginning-search
+bindkey '^[OB' down-line-or-beginning-search
+# Ctrl+X Ctrl+E: edit the current command in nvim
+autoload -Uz edit-command-line
+zle -N edit-command-line
+bindkey '^X^E' edit-command-line
+# Esc Esc: toggle "sudo " on the current line (empty line = last command)
+sudo-command-line() {
+    [[ -z $BUFFER ]] && zle up-history
+    local c=$CURSOR
+    if [[ $BUFFER == sudo\ * ]]; then
+        BUFFER="${BUFFER#sudo }"; CURSOR=$(( c > 5 ? c - 5 : 0 ))
+    else
+        BUFFER="sudo $BUFFER"; CURSOR=$(( c + 5 ))
+    fi
+}
+zle -N sudo-command-line
+bindkey '\e\e' sudo-command-line
+
+# --- shell helpers ----------------------------------------------------
+alias _='sudo '                       # _ apt install foo
+alias please='sudo $(fc -ln -1)'      # rerun last command with sudo
+alias reload='exec zsh'               # reload this config
+alias h='history 0'
+alias hs='history 0 | grep'           # hs nmap
+alias hsi='history 0 | grep -i'
+
+# --- encoding helpers (encode64 / urltools / jsontools style) --------
+# e64 'text'  or  echo text | e64
+e64() { if (( $# )); then print -rn -- "$*" | base64 -w0; else base64 -w0; fi; echo; }
+d64() { if (( $# )); then print -rn -- "$*" | base64 -d; else base64 -d; fi; echo; }
+# urlencode 'a b&c=d'  /  urldecode 'a%20b'
+urlencode() { python3 -c 'import sys,urllib.parse as u; print(u.quote(sys.argv[1], safe=""))' "$*"; }
+urldecode() { python3 -c 'import sys,urllib.parse as u; print(u.unquote(sys.argv[1]))' "$*"; }
+# curl -s api | pp_json    or    pp_json file.json
+pp_json() { if (( $+commands[jq] )); then jq . "$@"; else python3 -m json.tool "$@"; fi; }
+
+# --- git shortcuts ----------------------------------------------------
+# gf (tomnomnom/gf) and gau (getallurls) deliberately NOT aliased
+git_current_branch() { git symbolic-ref --quiet --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null; }
+alias g='git'
+alias ga='git add'
+alias gaa='git add --all'
+alias gb='git branch'
+alias gba='git branch -a'
+alias gc='git commit -v'
+alias gcmsg='git commit -m'
+alias gco='git checkout'
+alias gcb='git checkout -b'
+alias gsw='git switch'
+alias gswc='git switch -c'
+alias gd='git diff'
+alias gds='git diff --staged'
+alias gfa='git fetch --all --prune'
+alias gl='git pull'
+alias gp='git push'
+alias gpf='git push --force-with-lease'
+alias gpsup='git push --set-upstream origin $(git_current_branch)'
+alias gst='git status'
+alias gss='git status -s'
+alias glog='git log --oneline --decorate --graph'
+alias gloga='git log --oneline --decorate --graph --all'
+alias grb='git rebase'
+alias grbi='git rebase -i'
+alias grs='git restore'
+alias grv='git remote -v'
+alias gsta='git stash push'
+alias gstp='git stash pop'
+alias gcl='git clone --recurse-submodules'
+
+# --- systemd shortcuts ------------------------------------------------
+alias sc-status='systemctl status'
+alias sc-start='sudo systemctl start'
+alias sc-stop='sudo systemctl stop'
+alias sc-restart='sudo systemctl restart'
+alias sc-enable='sudo systemctl enable --now'
+alias sc-disable='sudo systemctl disable --now'
+alias sc-failed='systemctl --failed'
+alias jlog='journalctl -xeu'          # jlog ssh
+
+# --- nmap shortcuts ---------------------------------------------------
+alias nmap_open_ports='nmap --open'
+alias nmap_list_interfaces='nmap --iflist'
+alias nmap_ping_scan='nmap -n -sn'
+alias nmap_fast='nmap -F -T4 --version-light'
+alias nmap_detect_versions='sudo nmap -sV -O --osscan-guess -T4 -Pn'
+alias nmap_full='sudo nmap -sS -sV -p- -T4 -v'
+alias nmap_full_udp='sudo nmap -sU -T4 --top-ports 200 -v'
+alias nmap_check_for_vulns='nmap --script=vuln'
+
+#===================================================================#
+
+
+# enable auto-suggestions based on the history
+if [ -f /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]; then
+    . /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+    # change suggestion color
+    ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=#999'
+fi
+
+# enable command-not-found if installed
+if [ -f /etc/zsh_command_not_found ]; then
+    . /etc/zsh_command_not_found
+fi
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+export PATH="$PATH:/opt/nvim-linux64/bin"
+
+#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
+export SDKMAN_DIR="$HOME/.sdkman"
+[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+export PATH=$JAVA_HOME/bin:$PATH
+export PATH="$HOME/graudit:${PATH}"
+export GRDIR="$HOME/graudit/signatures"
+export PATH="$HOME/graudit:${PATH}"
+export GRDIR="$HOME/graudit/signatures"
+
+# >>> grok installer >>>
+export PATH="$HOME/.grok/bin:$PATH"
+fpath=(~/.grok/completions/zsh $fpath)
+autoload -Uz compinit && compinit -C
+# <<< grok installer <<<
+
+# per-machine secrets/env (untracked)
+[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
